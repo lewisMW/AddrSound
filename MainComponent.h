@@ -23,6 +23,7 @@ public:
     void getNextAudioBlock(const juce::AudioSourceChannelInfo&) override;
     void releaseResources() override;
 
+    void updateOmega();
     //==============================================================================
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -31,10 +32,12 @@ private:
     //==============================================================================
     // Your private member variables go here...
     juce::Random random;
+    double fs = 0.0; // Sampling frequency
+    double omega_0 = 0.0; // angular freq / fs
+    double currentAngle = 0.0;
 
     // GUI Elements:
-    juce::Slider gainSlider;
-    juce::Label gainLabel;
+    juce::Slider freqSlider;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
 };
