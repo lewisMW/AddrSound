@@ -5,6 +5,14 @@ MainComponent::MainComponent()
 {
     setSize (600, 400);
     setAudioChannels(0,2);
+
+    addAndMakeVisible(gainSlider);
+    gainSlider.setRange(0.0,1.0);
+    gainSlider.setValue(0.5);
+
+    addAndMakeVisible(gainLabel);
+    gainLabel.setText("Gain", juce::dontSendNotification);
+    gainLabel.attachToComponent(&gainSlider,false);
 }
 MainComponent::~MainComponent()
 {
@@ -24,6 +32,7 @@ void MainComponent::prepareToPlay (int samplesPerBlockExpected, double sampleRat
 
 void MainComponent::getNextAudioBlock (const juce::AudioSourceChannelInfo& bufferToFill)
 {
+    auto level = (float) gainSlider.getValue();
     for (auto channel = 0; channel < bufferToFill.buffer->getNumChannels(); ++channel)
     {
         // Get a pointer to the start sample in the buffer for this audio output channel
@@ -31,7 +40,7 @@ void MainComponent::getNextAudioBlock (const juce::AudioSourceChannelInfo& buffe
 
         // Fill the required number of samples with noise between -0.125 and +0.125
         for (auto sample = 0; sample < bufferToFill.numSamples; ++sample)
-            buffer[sample] = random.nextFloat() * 0.25f - 0.125f;
+            buffer[sample] = (random.nextFloat() * 0.25f - 0.125f) * level;
     }
 }
 
@@ -56,4 +65,7 @@ void MainComponent::resized()
     // This is called when the MainComponent is resized.
     // If you add any child components, this is where you should
     // update their positions.
+
+    gainSlider.setBounds(10,20,getWidth()-10,20);
+
 }
