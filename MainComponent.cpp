@@ -11,6 +11,9 @@ MainComponent::MainComponent()
     addAndMakeVisible(freqSlider);
     freqSlider.setRange(50.0,5000.0);
     freqSlider.setSkewFactorFromMidPoint(500.0);
+
+    setWantsKeyboardFocus(true);
+    addKeyListener(this);
 }
 MainComponent::~MainComponent()
 {
@@ -21,7 +24,7 @@ MainComponent::~MainComponent()
 
 void MainComponent::createWaveTable()
 {
-    sineTable.setSize(1, (int) tableSize);
+    sineTable.setSize(1, (int) tableSize + 1);
     auto* samples = sineTable.getWritePointer(0);
     auto angleDelta = juce::MathConstants<double>::twoPi / (double) (tableSize-1);
     auto currentAngle = 0.0;
@@ -32,18 +35,19 @@ void MainComponent::createWaveTable()
         samples[i] = (float) sample;
         currentAngle += angleDelta;
     }
+    samples[tableSize] = samples[0];
 }
 
 void MainComponent::prepareToPlay (int samplesPerBlockExpected, double sampleRate)
 {
-    auto numberOfOscillators = 6;
+    auto numberOfOscillators = 1;
 
     for(auto i=0; i < numberOfOscillators; i++)
     {
-        auto* oscillator = new WavetableOscillator(sineTable);
+        auto* oscillator = new WavetableOscillator(sineTable, (float) sampleRate);
         auto midiNote = 69 + 5*i;
         auto freq = 440.0*pow(2.0, (midiNote-69.0)/12.0);
-        oscillator->setFrequency((float) freq, (float) sampleRate);
+        oscillator->setFrequency((float) freq);
         oscillators.add(oscillator);
     }
     level = 0.25f / (float) numberOfOscillators;
@@ -84,6 +88,7 @@ void MainComponent::paint (juce::Graphics& g)
     g.setFont (juce::Font (16.0f));
     g.setColour (juce::Colours::white);
     g.drawText ("Hello World!", getLocalBounds(), juce::Justification::centred, true);
+    grabKeyboardFocus();
 }
 
 void MainComponent::resized()
@@ -94,4 +99,22 @@ void MainComponent::resized()
 
     freqSlider.setBounds(10,20,getWidth()-10,20);
 
+}
+
+//==============================================================================
+bool MainComponent::keyPressed(const juce::KeyPress& key, juce::Component* originatingComponent)
+{
+    auto keyCode = key.getKeyCode();
+    auto noteOffset = keyCode - 49;
+    DBG(std::to_string(keyCode));
+
+    for(auto oIndex=0; oIndex < oscillators.size(); oIndex++)
+    {
+        auto* oscillator = oscillators.getUnchecked(oIndex);
+        
+        auto midiNote = 69 + noteOffset;
+        auto freq = 440.0*pow(2.0, (midiNote-69.0)/12.0);
+        oscillator->setFrequency((float) freq);
+    }
+    return true;
 }

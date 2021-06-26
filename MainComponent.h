@@ -37,21 +37,20 @@ private:
 
 class WavetableOscillator {
 public:
-    WavetableOscillator(const juce::AudioSampleBuffer& waveTableToUse) : wavetable(waveTableToUse)
+    WavetableOscillator(const juce::AudioSampleBuffer& waveTableToUse, float sampleRate) : wavetable(waveTableToUse), tableSize(wavetable.getNumSamples() - 1), fs(sampleRate)
     {
         jassert(wavetable.getNumChannels() == 1);
     }
 
-    void setFrequency(float freq, float fs)
+    void setFrequency(float freq)
     {
-        tableDelta = freq * ((float) wavetable.getNumSamples()) / fs;
+        tableDelta = freq * ((float) tableSize / fs);
     }
 
     forcedinline float getNextSample() noexcept
     {
-        auto tableSize = (unsigned int) wavetable.getNumSamples();
         auto index0 = (unsigned int) currentIndex;
-        auto index1 = index0 == (tableSize - 1) ? (unsigned int) 0 : index0 + 1;
+        auto index1 = index0 + 1;
         auto frac = currentIndex - (float) index0;
 
         auto* table = wavetable.getReadPointer(0);
@@ -67,6 +66,8 @@ public:
 
 private:
     const juce::AudioSampleBuffer& wavetable;
+    const int tableSize;
+    const float fs;
     float currentIndex = 0.0f;
     float tableDelta = 0.0f;
 };
@@ -76,7 +77,7 @@ private:
     This component lives inside our window, and this is where you should put all
     your controls and content.
 */
-class MainComponent   : public juce::AudioAppComponent
+class MainComponent   : public juce::AudioAppComponent, public juce::KeyListener
 {
 public:
     //==============================================================================
@@ -92,6 +93,8 @@ public:
     //==============================================================================
     void paint (juce::Graphics&) override;
     void resized() override;
+    //==============================================================================
+    bool keyPressed(const juce::KeyPress&, juce::Component*) override;
 
 private:
     //==============================================================================
