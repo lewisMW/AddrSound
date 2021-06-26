@@ -3,13 +3,14 @@
 //==============================================================================
 MainComponent::MainComponent()
 {
+    createWaveTable();
+
     setSize (600, 400);
-    setAudioChannels(0,2);
+    setAudioChannels(0,2); // Only outputs
 
     addAndMakeVisible(freqSlider);
     freqSlider.setRange(50.0,5000.0);
     freqSlider.setSkewFactorFromMidPoint(500.0);
-    freqSlider.onValueChange = [this] {updateOmega();};
 }
 MainComponent::~MainComponent()
 {
@@ -18,36 +19,61 @@ MainComponent::~MainComponent()
 
 //==============================================================================
 
+void MainComponent::createWaveTable()
+{
+    sineTable.setSize(1, (int) tableSize);
+    auto* samples = sineTable.getWritePointer(0);
+    auto angleDelta = juce::MathConstants<double>::twoPi / (double) (tableSize-1);
+    auto currentAngle = 0.0;
+
+    for (unsigned int i=0; i < tableSize; i++)
+    {
+        auto sample = std::sin(currentAngle);
+        samples[i] = (float) sample;
+        currentAngle += angleDelta;
+    }
+}
+
 void MainComponent::prepareToPlay (int samplesPerBlockExpected, double sampleRate)
 {
-    fs = sampleRate;
-    updateOmega();
+    auto numberOfOscillators = 6;
+
+    for(auto i=0; i < numberOfOscillators; i++)
+    {
+        auto* oscillator = new WavetableOscillator(sineTable);
+        auto midiNote = 69 + 5*i;
+        auto freq = 440.0*pow(2.0, (midiNote-69.0)/12.0);
+        oscillator->setFrequency((float) freq, (float) sampleRate);
+        oscillators.add(oscillator);
+    }
+    level = 0.25f / (float) numberOfOscillators;
 }
 
 void MainComponent::getNextAudioBlock (const juce::AudioSourceChannelInfo& bufferToFill)
 {
-    auto level = 0.125f;
     auto* leftBuffer = bufferToFill.buffer->getWritePointer(0,bufferToFill.startSample);
     auto* rightBuffer = bufferToFill.buffer->getWritePointer(1,bufferToFill.startSample);
-    
-    for (auto sample = 0; sample < bufferToFill.numSamples; ++sample)
+    bufferToFill.clearActiveBufferRegion();
+
+    for(auto oIndex=0; oIndex < oscillators.size(); oIndex++)
     {
-        auto current = (float) std::sin(currentAngle);
-        currentAngle += omega_0;
-        leftBuffer[sample] = current*level;
-        rightBuffer[sample] = current*level;
+        auto* oscillator = oscillators.getUnchecked(oIndex);
+
+        for (auto sample = 0; sample < bufferToFill.numSamples; sample++)
+        {
+            auto current = oscillator->getNextSample() * level;
+            leftBuffer[sample] += current;
+            rightBuffer[sample] += current;
+        }
     }
 }
+
 
 void MainComponent::releaseResources()
 {
     juce::Logger::getCurrentLogger()->writeToLog ("Releasing audio resources");
 }
 
-void MainComponent::updateOmega() {
-    if (fs > 0.0)
-        omega_0 = freqSlider.getValue() * 2.0 * juce::MathConstants<double>::pi / fs;
-}
 
 //==============================================================================
 void MainComponent::paint (juce::Graphics& g)
