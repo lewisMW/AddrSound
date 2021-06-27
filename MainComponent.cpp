@@ -1,19 +1,18 @@
 #include "MainComponent.h"
 
 //==============================================================================
-MainComponent::MainComponent()
+MainComponent::MainComponent() : spectrum(50, 40, 1000), spectrumEditor(spectrum)
 {
     createWaveTable();
 
     setSize (600, 400);
     setAudioChannels(0,2); // Only outputs
 
-    addAndMakeVisible(freqSlider);
-    freqSlider.setRange(50.0,5000.0);
-    freqSlider.setSkewFactorFromMidPoint(500.0);
-
     setWantsKeyboardFocus(true);
     addKeyListener(this);
+
+    addAndMakeVisible(spectrumEditor);
+    addMouseListener(&spectrumEditor, false);
 }
 MainComponent::~MainComponent()
 {
@@ -40,17 +39,14 @@ void MainComponent::createWaveTable()
 
 void MainComponent::prepareToPlay (int samplesPerBlockExpected, double sampleRate)
 {
-    auto numberOfOscillators = 1;
-
-    for(auto i=0; i < numberOfOscillators; i++)
+    for(auto i=0; i < spectrum.size; i++)
     {
         auto* oscillator = new WavetableOscillator(sineTable, (float) sampleRate);
-        auto midiNote = 69 + 5*i;
-        auto freq = 440.0*pow(2.0, (midiNote-69.0)/12.0);
-        oscillator->setFrequency((float) freq);
+        oscillator->setFrequency(spectrum.freqs[i]);
+        oscillator->setAmplitude(spectrum.magnitudes[i]);
         oscillators.add(oscillator);
     }
-    level = 0.25f / (float) numberOfOscillators;
+    level = 0.25f / (float) spectrum.size;
 }
 
 void MainComponent::getNextAudioBlock (const juce::AudioSourceChannelInfo& bufferToFill)
@@ -62,6 +58,8 @@ void MainComponent::getNextAudioBlock (const juce::AudioSourceChannelInfo& buffe
     for(auto oIndex=0; oIndex < oscillators.size(); oIndex++)
     {
         auto* oscillator = oscillators.getUnchecked(oIndex);
+        oscillator->setAmplitude(spectrum.magnitudes[oIndex]);
+        oscillator->setFrequency(spectrum.freqs[oIndex]);
 
         for (auto sample = 0; sample < bufferToFill.numSamples; sample++)
         {
@@ -84,11 +82,6 @@ void MainComponent::paint (juce::Graphics& g)
 {
     // (Our component is opaque, so we must completely fill the background with a solid colour)
     g.fillAll (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId));
-
-    g.setFont (juce::Font (16.0f));
-    g.setColour (juce::Colours::white);
-    g.drawText ("Hello World!", getLocalBounds(), juce::Justification::centred, true);
-    grabKeyboardFocus();
 }
 
 void MainComponent::resized()
@@ -97,8 +90,7 @@ void MainComponent::resized()
     // If you add any child components, this is where you should
     // update their positions.
 
-    freqSlider.setBounds(10,20,getWidth()-10,20);
-
+    spectrumEditor.setBounds(50,50,400,300);
 }
 
 //==============================================================================

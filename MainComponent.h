@@ -7,70 +7,9 @@
 #include <juce_gui_extra/juce_gui_extra.h>
 #include <juce_audio_utils/juce_audio_utils.h>
 
-class SineOscillator {
-public:
-    SineOscillator() {}
-
-    void setFrequency(float freq, float fs) {
-        angleDelta = freq * juce::MathConstants<float>::twoPi / fs;
-    }
-
-    forcedinline void updateAngle() noexcept
-    {
-        currentAngle += angleDelta;
-        if(currentAngle >= juce::MathConstants<float>::twoPi)
-            currentAngle -= juce::MathConstants<float>::twoPi;
-    }
-
-    forcedinline float getNextSample() noexcept
-    {
-        auto currentSample = std::sin(currentAngle);
-        updateAngle();
-        return currentSample;
-    }
-
-private:
-    float currentAngle = 0.0f;
-    float angleDelta = 0.0f;
-
-};
-
-class WavetableOscillator {
-public:
-    WavetableOscillator(const juce::AudioSampleBuffer& waveTableToUse, float sampleRate) : wavetable(waveTableToUse), tableSize(wavetable.getNumSamples() - 1), fs(sampleRate)
-    {
-        jassert(wavetable.getNumChannels() == 1);
-    }
-
-    void setFrequency(float freq)
-    {
-        tableDelta = freq * ((float) tableSize / fs);
-    }
-
-    forcedinline float getNextSample() noexcept
-    {
-        auto index0 = (unsigned int) currentIndex;
-        auto index1 = index0 + 1;
-        auto frac = currentIndex - (float) index0;
-
-        auto* table = wavetable.getReadPointer(0);
-        auto value0 = table[index0];
-        auto value1 = table[index1];
-
-        auto currentSample = value0 + frac * (value1 - value0);
-        if ((currentIndex += tableDelta) > (float) tableSize)
-            currentIndex -= (float) tableSize;
-
-        return currentSample;
-    }
-
-private:
-    const juce::AudioSampleBuffer& wavetable;
-    const int tableSize;
-    const float fs;
-    float currentIndex = 0.0f;
-    float tableDelta = 0.0f;
-};
+#include "Spectrum.h"
+#include "SpectrumEditor.h"
+#include "WaveTableOscillator.h"
 
 //==============================================================================
 /*
@@ -98,7 +37,6 @@ public:
 
 private:
     //==============================================================================
-    // Your private member variables go here...
     juce::Random random;
     
     float level = 0.0f;
@@ -106,8 +44,10 @@ private:
     juce::AudioSampleBuffer sineTable;
     const unsigned int tableSize = 128;
 
+    Spectrum spectrum;
+
     // GUI Elements:
-    juce::Slider freqSlider;
+    SpectrumEditor spectrumEditor;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
 };
