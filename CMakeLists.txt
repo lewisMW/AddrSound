@@ -60,7 +60,10 @@ juce_add_gui_app(AddrSound
 target_sources(AddrSound
     PRIVATE
         Main.cpp
-        MainComponent.cpp)
+        MainComponent.cpp
+        Spectrum.cpp
+        SpectrumEditor.cpp
+        TimeSlider.cpp)
 
 # `target_compile_definitions` adds some preprocessor definitions to our target. In a Projucer
 # project, these might be passed in the 'Preprocessor Definitions' field. JUCE modules also make use

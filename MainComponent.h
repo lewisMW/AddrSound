@@ -9,6 +9,7 @@
 
 #include "Spectrum.h"
 #include "SpectrumEditor.h"
+#include "TimeSlider.h"
 #include "WaveTableOscillator.h"
 
 //==============================================================================
@@ -36,9 +37,7 @@ public:
     bool keyPressed(const juce::KeyPress&, juce::Component*) override;
 
 private:
-    //==============================================================================
-    juce::Random random;
-    
+    //==============================================================================   
     float level = 0.0f;
     juce::OwnedArray<WavetableOscillator> oscillators;
     juce::AudioSampleBuffer sineTable;
@@ -48,6 +47,7 @@ private:
 
     // GUI Elements:
     SpectrumEditor spectrumEditor;
+    TimeSlider timeSlider;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
 };

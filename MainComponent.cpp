@@ -1,7 +1,7 @@
 #include "MainComponent.h"
 
 //==============================================================================
-MainComponent::MainComponent() : spectrum(50, 40, 1000), spectrumEditor(spectrum)
+MainComponent::MainComponent() : spectrum(50, 100, 1000, 10, 4.0f), spectrumEditor(spectrum), timeSlider(spectrum, spectrumEditor)
 {
     createWaveTable();
 
@@ -13,6 +13,8 @@ MainComponent::MainComponent() : spectrum(50, 40, 1000), spectrumEditor(spectrum
 
     addAndMakeVisible(spectrumEditor);
     addMouseListener(&spectrumEditor, false);
+    addAndMakeVisible(timeSlider);
+    addMouseListener(&timeSlider, false);
 }
 MainComponent::~MainComponent()
 {
@@ -39,14 +41,14 @@ void MainComponent::createWaveTable()
 
 void MainComponent::prepareToPlay (int samplesPerBlockExpected, double sampleRate)
 {
-    for(auto i=0; i < spectrum.size; i++)
+    for(auto i=0; i < spectrum.getNFreqs(); i++)
     {
         auto* oscillator = new WavetableOscillator(sineTable, (float) sampleRate);
-        oscillator->setFrequency(spectrum.freqs[i]);
-        oscillator->setAmplitude(spectrum.magnitudes[i]);
+        oscillator->setAmplitude(spectrum.getMagnitude(i));
+        oscillator->setFrequency(spectrum.getFrequency(i));
         oscillators.add(oscillator);
     }
-    level = 0.25f / (float) spectrum.size;
+    level = 0.25f / (float) spectrum.getNFreqs();
 }
 
 void MainComponent::getNextAudioBlock (const juce::AudioSourceChannelInfo& bufferToFill)
@@ -58,8 +60,8 @@ void MainComponent::getNextAudioBlock (const juce::AudioSourceChannelInfo& buffe
     for(auto oIndex=0; oIndex < oscillators.size(); oIndex++)
     {
         auto* oscillator = oscillators.getUnchecked(oIndex);
-        oscillator->setAmplitude(spectrum.magnitudes[oIndex]);
-        oscillator->setFrequency(spectrum.freqs[oIndex]);
+        oscillator->setAmplitude(spectrum.getMagnitude(oIndex));
+        oscillator->setFrequency(spectrum.getFrequency(oIndex));
 
         for (auto sample = 0; sample < bufferToFill.numSamples; sample++)
         {
@@ -91,6 +93,7 @@ void MainComponent::resized()
     // update their positions.
 
     spectrumEditor.setBounds(50,50,400,300);
+    timeSlider.setBounds(50,360,400,20);
 }
 
 //==============================================================================

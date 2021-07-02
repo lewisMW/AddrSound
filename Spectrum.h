@@ -2,46 +2,110 @@
 
 #include <juce_gui_extra/juce_gui_extra.h>
 
+class TimeSlider;
+
 class Spectrum
 {
 public:
-    Spectrum(int N, float minFreq, float maxFreq) : size(N), minFreq(minFreq), maxFreq(maxFreq)
-    {
-        freqRange = maxFreq - minFreq;
-        // Initialise spectrum to all 0
-        for (auto i = 0; i < N; i++)
-        {
-            magnitudes.add(0.0f);
-            float freq = freqFromIndex(i);
-            freqs.add(freq);
-        }
-    }
+    Spectrum(int nFreqs, float noteFreq, float maxFreq, int nKeyFrames, float duration);
 
     // Logarithmically scale frequencies to ensure less freqs within lower range of human hearing.
-    float freqFromIndex(int freqIndex)
-    {
-        //TODO pow(2.0, (inputFreq - minFreq));
-        return minFreq * (float) freqIndex;
-    }
+    float freqFromIndex(int freqIndex);
+    float getFrequency(int index);
+    int getNFreqs();
 
-    float getFrequency(int index)
-    {
-        return (freqs[index] - minFreq) / freqRange;
-    }
-    void setMagnitude(int index, float mag)
-    {
-        magnitudes.set(index, mag);
-    }
-    float getMagnitude(int index)
-    {
-        return magnitudes[index];
-    }
+    void setMagnitude(int fIndex, float mag);
+    float getMagnitude(int fIndex);
 
-    juce::Array<float> magnitudes;
-    juce::Array<float> freqs;
-    int size;
+    void setTime(float t);
+
+    float getDuration();
+    int getNKeyFrames();
+
+    TimeSlider* timeSlider = nullptr;
+    void updateKeyFrameTimes(juce::Array<float>& arrayOfKFTimes);
+    
 private:
-    const float minFreq;
+
+    class KeyFrame
+    {
+    public:
+        KeyFrame(int index, Spectrum* spec);
+        
+        bool operator<(KeyFrame a);
+
+        KeyFrame* getNextActive();
+        float getTimeStamp();
+        
+        void setMagnitude(int fIndex, float mag);
+        float getMagnitude(int fIndex);
+        
+        void setActive(KeyFrame* toCopy = nullptr);
+        void removeActive();
+        bool getIsActive();
+
+        void refreshKFLinks();
+
+    private:
+        juce::Array<float> magnitudes;
+        bool isActive;
+        const int kFIndex;
+        const float timeStamp;
+        KeyFrame* nextActive;
+        KeyFrame* prevActive;
+        const Spectrum* spectrum;
+
+        inline float interpolate(int fIndex, KeyFrame* left, KeyFrame* right);
+    };
+
+
+    float noteFreq;
+    
     const float maxFreq;
-    float freqRange;
+    const float freqRange;
+    const int nKeyFrames;
+    const int nFreqs;
+    const float duration;
+    
+    juce::OwnedArray<KeyFrame> keyFrames;
+    juce::Array<float> freqs;
+    
+    int keyFrameIndex;
+    float time;
+    
+    enum ErrorCode {KeyFrameOutOfBounds, NullKeyFrame, KeyFrameExists};
+    inline void printError(int kFIndex, ErrorCode err)
+    {
+        switch(err)
+        {
+            case KeyFrameOutOfBounds:
+                DBG("Keyframe out of bounds! Given index=" + juce::String(kFIndex) + " > nKeyFrames = " + juce::String(nKeyFrames));
+                break;
+            case NullKeyFrame:
+                DBG("Keyframe does not exist at given index=" + juce::String(kFIndex));
+                break;
+            case KeyFrameExists:
+                DBG("Keyframe already exists at index=" + juce::String(kFIndex));
+                break;
+        }
+    }
+    inline int keyFrameExists(int kFIndex, bool checkExists=true)
+    {
+        if (kFIndex >= nKeyFrames)
+        {
+            printError(kFIndex, KeyFrameOutOfBounds);
+            return -1;
+        }
+        if (keyFrames[kFIndex] == nullptr && checkExists)
+        {
+            printError(kFIndex, NullKeyFrame);
+            return -1;
+        }
+        if (keyFrames[kFIndex] != nullptr && !checkExists)
+        {
+            printError(kFIndex, KeyFrameExists);
+            return -1;
+        }
+        return 1;
+    }
 };
