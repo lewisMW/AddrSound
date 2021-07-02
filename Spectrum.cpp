@@ -14,27 +14,20 @@ Spectrum::Spectrum(int nFreqs, float noteFreq, float maxFreq, int nKeyFrames, fl
         keyFrames.add(new KeyFrame(i, this));
     }
 
-    // Initialise frequency array
-    for (auto i = 0; i < nFreqs; i++)
-    {
-        float freq = freqFromIndex(i);
-        freqs.add(freq);
-    }
-
     // Set first keyframe to active, initialising its spectrum to all 0s:
     keyFrames[keyFrameIndex]->setActive(); // Also sets key frame active links
 }
 
 // Logarithmically scale frequencies to ensure less freqs within lower range of human hearing.
-float Spectrum::freqFromIndex(int freqIndex)
+float Spectrum::getFrequency(int freqIndex)
 {
     //TODO pow(2.0, (inputFreq - noteFreq));
     return noteFreq * (float) freqIndex;
 }
 
-float Spectrum::getFrequency(int index)
+void Spectrum::setFirstFrequency(float freq)
 {
-    return freqs[index];
+    noteFreq = freq;
 }
 
 int Spectrum::getNFreqs() {return nFreqs;}

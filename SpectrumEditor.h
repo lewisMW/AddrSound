@@ -22,7 +22,6 @@ private:
     {
         SpectrumPoint(int i, Spectrum& spectrum);
         float magnitude;
-        float frequency;
         juce::Point<float> displayCoords;
         bool selected = false;
         const int index;
@@ -30,6 +29,7 @@ private:
 
         inline void updateMagnitude(float mag);
         inline void fromSpectrum();
+        inline float getFrequency();
     };
     
     juce::OwnedArray<SpectrumPoint> spectrumPoints;

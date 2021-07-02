@@ -10,8 +10,8 @@ public:
     Spectrum(int nFreqs, float noteFreq, float maxFreq, int nKeyFrames, float duration);
 
     // Logarithmically scale frequencies to ensure less freqs within lower range of human hearing.
-    float freqFromIndex(int freqIndex);
     float getFrequency(int index);
+    void setFirstFrequency(float freq);
     int getNFreqs();
 
     void setMagnitude(int fIndex, float mag);
@@ -68,7 +68,6 @@ private:
     const float duration;
     
     juce::OwnedArray<KeyFrame> keyFrames;
-    juce::Array<float> freqs;
     
     int keyFrameIndex;
     float time;

@@ -103,13 +103,8 @@ bool MainComponent::keyPressed(const juce::KeyPress& key, juce::Component* origi
     auto noteOffset = keyCode - 49;
     DBG(std::to_string(keyCode));
 
-    for(auto oIndex=0; oIndex < oscillators.size(); oIndex++)
-    {
-        auto* oscillator = oscillators.getUnchecked(oIndex);
-        
-        auto midiNote = 69 + noteOffset;
-        auto freq = 440.0*pow(2.0, (midiNote-69.0)/12.0);
-        oscillator->setFrequency((float) freq);
-    }
+    auto midiNote = 69 + noteOffset;
+    auto freq = 440.0*pow(2.0, (midiNote-69.0)/12.0);
+    spectrum.setFirstFrequency((float) freq);                    
     return true;
 }

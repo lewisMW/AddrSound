@@ -114,9 +114,11 @@ inline void SpectrumEditor::SpectrumPoint::updateMagnitude(float mag)
     spectrum.setMagnitude(index, mag);
 }
 inline void SpectrumEditor::SpectrumPoint::fromSpectrum()
-{ 
-    if (!frequency) frequency = spectrum.getFrequency(index);
+{
     magnitude = spectrum.getMagnitude(index);
 }
    
-    
+inline float SpectrumEditor::SpectrumPoint::getFrequency()
+{
+    return spectrum.getFrequency(index);
+}
