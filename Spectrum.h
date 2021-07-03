@@ -25,6 +25,7 @@ public:
 
     TimeSlider* timeSlider = nullptr;
     void updateKeyFrameTimes(juce::Array<float>& arrayOfKFTimes);
+    void deleteKeyframe(float t);
 
     enum PlayState {EditingSpectrum, PlayingSound, Stopped};
     PlayState getPlayState();

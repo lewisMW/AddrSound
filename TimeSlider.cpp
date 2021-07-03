@@ -58,22 +58,26 @@ void TimeSlider::paint (juce::Graphics& g)
 
 void TimeSlider::mouseDrag (const juce::MouseEvent& event) 
 {
-    if (spectrum.getPlayState() != Spectrum::PlayState::PlayingSound)
+    const juce::ModifierKeys& modifierKeys = event.mods;
+    if (modifierKeys.isLeftButtonDown())
     {
-        float time = spectrum.getTime();
-        float duration = spectrum.getDuration();
-        float paddedWidth = (float) getWidth();
-        float width = paddedWidth - leftPadding - rightPadding;
+        if (spectrum.getPlayState() != Spectrum::PlayState::PlayingSound)
+        {
+            float time = spectrum.getTime();
+            float duration = spectrum.getDuration();
+            float paddedWidth = (float) getWidth();
+            float width = paddedWidth - leftPadding - rightPadding;
 
-        float x = event.position.x;
-        // Set bounds:
-        if (x < leftPadding || x > leftPadding + width)
-            return;
+            float x = event.position.x;
+            // Set bounds:
+            if (x < leftPadding || x > leftPadding + width)
+                return;
 
-        time = xToTime(duration, width, x);
+            time = xToTime(duration, width, x);
 
-        spectrum.setTime(time);
-        repaintAll();
+            spectrum.setTime(time);
+            repaintAll();
+        }
     }
 }
 
@@ -81,7 +85,7 @@ void TimeSlider::mouseUp (const juce::MouseEvent& event)
 {
     if (spectrum.getPlayState() != Spectrum::PlayState::PlayingSound)
     {
-        // Snap time to key frame grid:
+        // Get nearest keyframe grid time:
         float time = spectrum.getTime();
         float keyFramePeriod = spectrum.getDuration() / (spectrum.getNKeyFrames() - 1);
         float deltaTime = (float) fmod(time, keyFramePeriod);
@@ -90,8 +94,19 @@ void TimeSlider::mouseUp (const juce::MouseEvent& event)
         if (roundDirection < 0) time -= deltaTime;
         else time += (keyFramePeriod - deltaTime);
 
-        spectrum.setTime(time);
+        const juce::ModifierKeys& modifierKeys = event.mods;
+        if (modifierKeys.isLeftButtonDown())
+        {
+            // Snap time to key frame grid:
+            spectrum.setTime(time);
+        }
+        else if (modifierKeys.isRightButtonDown()) 
+        {
+            // Right click deletes this keyframe
+            spectrum.deleteKeyframe(time);
+        }
         repaintAll();
+        
     }
 }
 

@@ -69,6 +69,12 @@ void Spectrum::updateKeyFrameTimes(juce::Array<float>& arrayOfKFTimes)
     }
 
 }
+void Spectrum::deleteKeyframe(float t)
+{
+    int kFIndex = juce::roundToInt<float>((t / duration)*(nKeyFrames-1));
+    if(keyFrameExists(kFIndex))
+        keyFrames[kFIndex]->removeActive();
+}
 
 float Spectrum::getDuration() {return duration;}
 int Spectrum::getNKeyFrames() {return nKeyFrames;}
@@ -154,9 +160,13 @@ void Spectrum::KeyFrame::setActive(KeyFrame* toCopy)
 
 void Spectrum::KeyFrame::removeActive()
 {
-    magnitudes.clear();
-    isActive = false;
-    refreshKFLinks();
+    if (isActive)
+    {
+        magnitudes.clear();
+        isActive = false;
+        refreshKFLinks();
+        if (spectrum && spectrum->timeSlider) spectrum->timeSlider->refreshKeyFrameMarkers();
+    }
 }
 
 bool Spectrum::KeyFrame::getIsActive() {return isActive;}

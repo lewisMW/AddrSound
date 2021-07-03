@@ -19,7 +19,7 @@ void SpectrumEditor::paint (juce::Graphics& g)
     g.setColour(juce::Colours::red);
     
     juce::Path spectrumPath;
-    spectrumPath.startNewSubPath(juce::Point<float> (0,(float) getHeight()));
+    spectrumPath.startNewSubPath(juce::Point<float> (0,(float) getHeight() - bottomPadding));
     for (auto i=0; i < spectrumPoints.size(); i++)
     {
         if (spectrumPoints[i] == nullptr) continue;
@@ -36,7 +36,7 @@ void SpectrumEditor::paint (juce::Graphics& g)
         float circleRadius = boundaryRadius;
         g.fillEllipse(coords.x - circleRadius, coords.y - circleRadius, 2*circleRadius, 2*circleRadius);
     }
-    spectrumPath.lineTo(juce::Point<float> ((float) getWidth(),(float) getHeight()));
+    spectrumPath.lineTo(juce::Point<float> ((float) getWidth(),(float) getHeight() - bottomPadding));
     spectrumPath.closeSubPath();
     g.setColour(juce::Colours::red);
     g.strokePath (spectrumPath, juce::PathStrokeType (1.0f));
