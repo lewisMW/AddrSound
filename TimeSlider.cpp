@@ -6,7 +6,10 @@
 #include "Spectrum.h"
 #include "SpectrumEditor.h"
 
-TimeSlider::TimeSlider(Spectrum& spectrum, SpectrumEditor& spectrumEditor) : spectrum(spectrum), spectrumEditor(spectrumEditor), time(0.0f) 
+TimeSlider::TimeSlider(Spectrum& spectrum, SpectrumEditor& spectrumEditor)
+    : spectrum(spectrum), spectrumEditor(spectrumEditor),
+      playSamplePeriod(spectrum.getDuration()/(4*(spectrum.getNKeyFrames())) ),
+      playerTimer(this)
 {
     spectrum.updateKeyFrameTimes(keyFrameTimes);
     spectrum.timeSlider = this;
@@ -23,6 +26,7 @@ void TimeSlider::paint (juce::Graphics& g)
     //float xCenter = width / 2;
     float duration = spectrum.getDuration();
     float keyFramePeriod = duration / (spectrum.getNKeyFrames() - 1);
+    float time = spectrum.getTime();
 
     // Center line
     g.setColour(juce::Colours::indianred);
@@ -54,37 +58,41 @@ void TimeSlider::paint (juce::Graphics& g)
 
 void TimeSlider::mouseDrag (const juce::MouseEvent& event) 
 {
-    float duration = spectrum.getDuration();
-    float paddedWidth = (float) getWidth();
-    float width = paddedWidth - leftPadding - rightPadding;
+    if (spectrum.getPlayState() != Spectrum::PlayState::PlayingSound)
+    {
+        float time = spectrum.getTime();
+        float duration = spectrum.getDuration();
+        float paddedWidth = (float) getWidth();
+        float width = paddedWidth - leftPadding - rightPadding;
 
-    float x = event.position.x;
-    // Set bounds:
-    if (x < leftPadding || x > leftPadding + width)
-        return;
+        float x = event.position.x;
+        // Set bounds:
+        if (x < leftPadding || x > leftPadding + width)
+            return;
 
-    time = xToTime(duration, width, x);
+        time = xToTime(duration, width, x);
 
-    spectrum.setTime(time);
-    repaint();
-    spectrumEditor.refreshPoints();
-    spectrumEditor.repaint();
+        spectrum.setTime(time);
+        repaintAll();
+    }
 }
 
 void TimeSlider::mouseUp (const juce::MouseEvent& event) 
 {
-    // Snap time to key frame grid:
-    float keyFramePeriod = spectrum.getDuration() / (spectrum.getNKeyFrames() - 1);
-    float deltaTime = (float) fmod(time, keyFramePeriod);
-    float roundDirection = deltaTime - keyFramePeriod/2;
+    if (spectrum.getPlayState() != Spectrum::PlayState::PlayingSound)
+    {
+        // Snap time to key frame grid:
+        float time = spectrum.getTime();
+        float keyFramePeriod = spectrum.getDuration() / (spectrum.getNKeyFrames() - 1);
+        float deltaTime = (float) fmod(time, keyFramePeriod);
+        float roundDirection = deltaTime - keyFramePeriod/2;
 
-    if (roundDirection < 0) time -= deltaTime;
-    else time += (keyFramePeriod - deltaTime);
+        if (roundDirection < 0) time -= deltaTime;
+        else time += (keyFramePeriod - deltaTime);
 
-    spectrum.setTime(time);
-    repaint();
-    spectrumEditor.refreshPoints();
-    spectrumEditor.repaint();
+        spectrum.setTime(time);
+        repaintAll();
+    }
 }
 
 void TimeSlider::refreshKeyFrameMarkers()
@@ -101,4 +109,54 @@ inline float TimeSlider::timeToX(float duration, float width, float t)
 inline float TimeSlider::xToTime(float duration, float width, float x)
 {
     return (x - leftPadding) / width * duration;
+}
+
+inline void TimeSlider::repaintAll()
+{
+    repaint();
+    spectrumEditor.refreshPoints();
+    spectrumEditor.repaint();
+}
+
+// PlayTimer automatically plays the sound
+
+void TimeSlider::playSound()
+{
+    playerTimer.play();
+}
+
+TimeSlider::PlayerTimer::PlayerTimer(TimeSlider* tS)
+{
+    spectrum = &tS->spectrum;
+    timeSlider = tS;
+    timerInterval = juce::roundToInt<float>(tS->playSamplePeriod*1000);
+}
+
+void TimeSlider::PlayerTimer::timerCallback()
+{
+    float time = spectrum->getTime();
+    float duration = spectrum->getDuration();
+
+    if(time + timeSlider->playSamplePeriod < duration)
+    {
+        time += timeSlider->playSamplePeriod;
+        spectrum->setTime(time);
+    }
+    else
+    {
+        stopTimer();
+        spectrum->setPlayState(Spectrum::PlayState::Stopped);
+    }
+    timeSlider->repaintAll();
+}
+void TimeSlider::PlayerTimer::play()
+{   
+    if (spectrum->getPlayState() == Spectrum::PlayState::PlayingSound)
+    {
+        stopTimer();
+    }
+    spectrum->setTime(0.0f);
+    spectrum->setPlayState(Spectrum::PlayState::PlayingSound);
+    startTimer(timerInterval);
+    timeSlider->repaintAll();
 }

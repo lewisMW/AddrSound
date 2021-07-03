@@ -22,7 +22,7 @@ Spectrum::Spectrum(int nFreqs, float noteFreq, float maxFreq, int nKeyFrames, fl
 float Spectrum::getFrequency(int freqIndex)
 {
     //TODO pow(2.0, (inputFreq - noteFreq));
-    return noteFreq * (float) freqIndex;
+    return noteFreq * (float) (freqIndex+1);
 }
 
 void Spectrum::setFirstFrequency(float freq)
@@ -34,8 +34,12 @@ int Spectrum::getNFreqs() {return nFreqs;}
 
 void Spectrum::setMagnitude(int fIndex, float mag)
 {
-    if(keyFrameExists(keyFrameIndex))
-        keyFrames[keyFrameIndex]->setMagnitude(fIndex, mag);
+    if (playState != PlayingSound)
+    {
+        playState = EditingSpectrum;
+        if(keyFrameExists(keyFrameIndex))
+            keyFrames[keyFrameIndex]->setMagnitude(fIndex, mag);
+    }
 }
 
 float Spectrum::getMagnitude(int fIndex)
@@ -47,9 +51,11 @@ float Spectrum::getMagnitude(int fIndex)
 
 void Spectrum::setTime(float t)
 {
+    if (playState == Stopped) playState = EditingSpectrum;
     time = t;
     keyFrameIndex = juce::roundToInt<float>((time / duration)*(nKeyFrames-1));
 }
+float Spectrum::getTime() {return time;}
 
 void Spectrum::updateKeyFrameTimes(juce::Array<float>& arrayOfKFTimes)
 {
@@ -66,6 +72,10 @@ void Spectrum::updateKeyFrameTimes(juce::Array<float>& arrayOfKFTimes)
 
 float Spectrum::getDuration() {return duration;}
 int Spectrum::getNKeyFrames() {return nKeyFrames;}
+
+Spectrum::PlayState Spectrum::getPlayState() {return playState;}
+
+void Spectrum::setPlayState(Spectrum::PlayState pS) {playState = pS;}
 
 
 

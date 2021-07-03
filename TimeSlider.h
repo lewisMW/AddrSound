@@ -17,8 +17,9 @@ public:
 
     void refreshKeyFrameMarkers();
 
+    void playSound();
+
 private:
-   
     const float leftPadding = 5.0f;
     const float rightPadding = 5.0f;
     const float topPadding = 2.0f;
@@ -26,11 +27,25 @@ private:
     const float centerLineThickness = 2.0f;
     const float circleRadius= 6.0f;
     const float keyFrameThickness = 2.0f;
-    float time;
+
+    const float playSamplePeriod;// in seconds
     juce::Array<float> keyFrameTimes;
+    
     Spectrum& spectrum;
     SpectrumEditor& spectrumEditor;
+    class PlayerTimer : juce::Timer
+    {
+    public:
+        PlayerTimer(TimeSlider* tS);
+        void timerCallback() override;
+        void play();
+        TimeSlider* timeSlider;
+        Spectrum* spectrum;
+        int timerInterval;
+    } playerTimer;
+
 
     inline float timeToX(float duration, float width, float t);
     inline float xToTime(float duration, float width, float x);
+    inline void repaintAll();
 };

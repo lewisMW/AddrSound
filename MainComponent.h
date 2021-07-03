@@ -35,6 +35,7 @@ public:
     void resized() override;
     //==============================================================================
     bool keyPressed(const juce::KeyPress&, juce::Component*) override;
+    void setKeyboardNoteBindings();
 
 private:
     //==============================================================================   
@@ -48,6 +49,8 @@ private:
     // GUI Elements:
     SpectrumEditor spectrumEditor;
     TimeSlider timeSlider;
+
+    juce::HashMap<int, int> keyboardNoteBindings;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
 };

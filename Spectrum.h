@@ -18,13 +18,18 @@ public:
     float getMagnitude(int fIndex);
 
     void setTime(float t);
+    float getTime();
 
     float getDuration();
     int getNKeyFrames();
 
     TimeSlider* timeSlider = nullptr;
     void updateKeyFrameTimes(juce::Array<float>& arrayOfKFTimes);
-    
+
+    enum PlayState {EditingSpectrum, PlayingSound, Stopped};
+    PlayState getPlayState();
+    void setPlayState(PlayState pS);
+
 private:
 
     class KeyFrame
@@ -58,19 +63,20 @@ private:
         inline float interpolate(int fIndex, KeyFrame* left, KeyFrame* right);
     };
 
-
     float noteFreq;
     
     const float maxFreq;
     const float freqRange;
     const int nKeyFrames;
     const int nFreqs;
-    const float duration;
+    const float duration; // in seconds
     
     juce::OwnedArray<KeyFrame> keyFrames;
     
     int keyFrameIndex;
     float time;
+
+    PlayState playState;
     
     enum ErrorCode {KeyFrameOutOfBounds, NullKeyFrame, KeyFrameExists};
     inline void printError(int kFIndex, ErrorCode err)

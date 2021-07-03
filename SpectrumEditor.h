@@ -16,6 +16,7 @@ public:
 
     void refreshPoints();
 
+    void clearSpectrum();
     
 private:
     struct SpectrumPoint

@@ -73,16 +73,29 @@ void SpectrumEditor::mouseDrag (const juce::MouseEvent& event)
     }
 }
 
+void SpectrumEditor::mouseUp (const juce::MouseEvent& event)  
+{
+    const juce::ModifierKeys& modifierKeys = event.mods;
+    if (modifierKeys.isLeftButtonDown())
+    {
+        if (pointSelected != nullptr)
+            pointSelected->selected = false;
+    }
+    else if (modifierKeys.isRightButtonDown()) // Right click clears the spectrum
+    {
+        clearSpectrum();
+        repaint();
+    }
+}
+
 void SpectrumEditor::refreshPoints()
 {
     for (SpectrumPoint* p : spectrumPoints) p->fromSpectrum();
 }
 
-void SpectrumEditor::mouseUp (const juce::MouseEvent& event)  
+void SpectrumEditor::clearSpectrum()
 {
-    if (pointSelected != nullptr)
-        pointSelected->selected = false;
-    DBG("EVENT: Mouse up");
+    for (SpectrumPoint* p : spectrumPoints) p->updateMagnitude(0.0f);
 }
 
 inline float  SpectrumEditor::coordsToMagnitude(const juce::Point<float>& point)

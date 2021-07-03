@@ -1,7 +1,10 @@
 #include "MainComponent.h"
 
 //==============================================================================
-MainComponent::MainComponent() : spectrum(50, 100, 1000, 10, 4.0f), spectrumEditor(spectrum), timeSlider(spectrum, spectrumEditor)
+MainComponent::MainComponent()
+    : spectrum(30, 100, 1000, 10, 0.5f),
+      spectrumEditor(spectrum),
+      timeSlider(spectrum, spectrumEditor)
 {
     createWaveTable();
 
@@ -15,7 +18,10 @@ MainComponent::MainComponent() : spectrum(50, 100, 1000, 10, 4.0f), spectrumEdit
     addMouseListener(&spectrumEditor, false);
     addAndMakeVisible(timeSlider);
     addMouseListener(&timeSlider, false);
+
+    setKeyboardNoteBindings();
 }
+
 MainComponent::~MainComponent()
 {
     shutdownAudio();
@@ -48,7 +54,7 @@ void MainComponent::prepareToPlay (int samplesPerBlockExpected, double sampleRat
         oscillator->setFrequency(spectrum.getFrequency(i));
         oscillators.add(oscillator);
     }
-    level = 0.25f / (float) spectrum.getNFreqs();
+    level = 0.5f / (float) spectrum.getNFreqs();
 }
 
 void MainComponent::getNextAudioBlock (const juce::AudioSourceChannelInfo& bufferToFill)
@@ -100,11 +106,22 @@ void MainComponent::resized()
 bool MainComponent::keyPressed(const juce::KeyPress& key, juce::Component* originatingComponent)
 {
     auto keyCode = key.getKeyCode();
-    auto noteOffset = keyCode - 49;
-    DBG(std::to_string(keyCode));
-
-    auto midiNote = 69 + noteOffset;
-    auto freq = 440.0*pow(2.0, (midiNote-69.0)/12.0);
-    spectrum.setFirstFrequency((float) freq);                    
+    if (keyboardNoteBindings.contains(keyCode))
+    {
+        auto noteOffset = keyboardNoteBindings[keyCode];
+        auto midiNote = 69 + noteOffset;
+        auto freq = 440.0*pow(2.0, (midiNote-69.0)/12.0);
+        spectrum.setFirstFrequency((float) freq);
+        timeSlider.playSound();
+    }
     return true;
+}
+
+void MainComponent::setKeyboardNoteBindings()
+{
+    const int keys[] = {65, 87, 83, 69, 68, 70, 84, 71, 89, 72, 85, 74, 75, 79, 76, 80, 59, 39, 93, 13};
+    for (int i = 0; i < sizeof(keys)/sizeof(keys[0]); i++)
+    {
+         keyboardNoteBindings.set(keys[i],i);
+    }
 }
