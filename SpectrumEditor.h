@@ -47,6 +47,7 @@ private:
     // Point selected:
     SpectrumPoint* pointSelected = nullptr;
 
+    const float topPadding = 5.0f;
     const float bottomPadding = 10.0f;
     const float leftPadding = 7.0f;
     const float boundaryRadius = 5.0f;

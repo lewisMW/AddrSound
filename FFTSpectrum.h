@@ -31,7 +31,7 @@ public:
 
     void refreshFFT();
 
-    void window(float* x, int N);
+    void hanningWindow(float* x, int N);
 
     void FFT(const float* x_raw, std::complex<float>* X, int nDFTSamples, int nSignalSamples);
 

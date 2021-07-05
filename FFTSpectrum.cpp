@@ -69,6 +69,9 @@ void FFTSpectrum::refreshFFT()
     auto nFFTPoints = nFreqs*2; // 2x DFT points to account for halving the symmetric spectrum
     auto* spectrumArr = fftSpectrumArray.getRawDataPointer();
     auto* downSampledSignal = downSampled.getRawDataPointer();
+
+    hanningWindow(downSampledSignal, fftWindowSampleN); // Apply a Hanning window
+
     FFT(downSampledSignal, spectrumArr, nFFTPoints, fftWindowSampleN); 
 
     float max = 0.0f;
@@ -87,13 +90,14 @@ void FFTSpectrum::refreshFFT()
     }
 }
 
-void FFTSpectrum::window(float* x, int N)
+void FFTSpectrum::hanningWindow(float* x, int N)
 {
     const float pi = std::acosf(-1);
-    // Windowing :
+    // Windowing : (lecture 7, p55)
     auto hanning = [&](int n){
         return 0.5f * (1 + std::cosf(pi * (n - N/2) / (N/2 + 1) ) );
     };
+    for (int i=0; i<N; i++) x[i] *= hanning(i);
 }
 
 
@@ -101,8 +105,7 @@ void FFTSpectrum::window(float* x, int N)
 void FFTSpectrum::FFT(const float* x_raw, std::complex<float>* X, int nDFTSamples, int nSignalSamples)
 {
     using namespace std::complex_literals;
-    // Want 20kHz resolution? -> 1/T_obs = 1/(N * T_s) = 20kHz -> N*T_s=20000
-    // Can zero-fill
+    
     const double pi = std::acos(-1); // shortcut to get pi
     static const std::complex<double> twoPi = 2*pi;
     int nBits = (int) std::log2f((float) nDFTSamples);
@@ -127,10 +130,10 @@ void FFTSpectrum::FFT(const float* x_raw, std::complex<float>* X, int nDFTSample
     std::vector<float> x_padded(nDFTSamples);
     float* x = x_padded.data();
     if (nSignalSamples > nDFTSamples) nSignalSamples = nDFTSamples;
-    std::memcpy(x, x_raw, sizeof(float) * nSignalSamples); //std::copy
+    std::memcpy(x, x_raw, sizeof(float) * nSignalSamples);
     std::memset(x + nSignalSamples, 0, sizeof(float)*(nDFTSamples-nSignalSamples));
 
-    // Decimation-in-time DIT from lecture 7 :
+    // Decimation-in-time DIT from lecture 7 p26 :
     struct stackData {
         stackData(int k, int N) : k(k), N(N), W_N(std::exp(-1i * (twoPi/std::complex<double>(N)) )) {}
         int k;

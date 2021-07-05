@@ -10,7 +10,7 @@ public:
     virtual float getFrequency(int index) = 0;
     int getNFreqs();
     virtual float getMagnitude(int fIndex) = 0;
-    virtual void setMagnitude(int fIndex, float mag) {}
+    virtual void setMagnitude(int /*fIndex*/, float /*mag*/) {}
 
     virtual void setTime(float t);
     float getTime();

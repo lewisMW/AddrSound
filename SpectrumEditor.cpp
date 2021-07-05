@@ -162,12 +162,12 @@ void SpectrumEditor::addRefSpectrum()
 
 inline float  SpectrumEditor::coordsToMagnitude(const juce::Point<float>& point)
 {
-    return 1 - (point.y + bottomPadding)/getHeight();
+    return 1.0f - (point.y-topPadding)/(getHeight()-bottomPadding-topPadding);
 }
 inline void  SpectrumEditor::updateDisplayCoords(SpectrumPoint* point)
 {
     point->displayCoords.x = ((float) point->index/point->spectrum.getNFreqs()) * getWidth() + leftPadding;
-    point->displayCoords.y = (1 - point->magnitude)*getHeight() - bottomPadding;
+    point->displayCoords.y = topPadding + (1.0f - point->magnitude)*(getHeight()-bottomPadding-topPadding);
 }
 
 inline bool  SpectrumEditor::inBoundary(const juce::Point<float>& circleCenter, const juce::Point<float>& testPoint)
