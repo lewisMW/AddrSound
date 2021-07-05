@@ -3,11 +3,13 @@
 #include <juce_gui_extra/juce_gui_extra.h>
 
 class Spectrum;
+class AdditiveSpectrum;
+class FFTSpectrum;
 
 class SpectrumEditor : public juce::Component
 {
 public:
-    SpectrumEditor(Spectrum& spectrum);
+    SpectrumEditor(AdditiveSpectrum& spectrum, FFTSpectrum& refSpectrum);
 
     void paint (juce::Graphics& g) override;
 
@@ -15,8 +17,12 @@ public:
     void mouseDrag (const juce::MouseEvent& event) override;
 
     void refreshPoints();
+    void refreshRefPoints();
 
     void clearSpectrum();
+    void clearRefSpectrum();
+
+    void addRefSpectrum();
     
 private:
     struct SpectrumPoint
@@ -34,6 +40,7 @@ private:
     };
     
     juce::OwnedArray<SpectrumPoint> spectrumPoints;
+    juce::OwnedArray<SpectrumPoint> refSpectrumPoints;
     inline float coordsToMagnitude(const juce::Point<float>& point);
     inline void updateDisplayCoords(SpectrumPoint* point);
     
@@ -45,5 +52,6 @@ private:
     const float boundaryRadius = 5.0f;
     inline bool inBoundary(const juce::Point<float>& circleCenter, const juce::Point<float>& testPoint);
     
-    Spectrum& spectrum;
+    AdditiveSpectrum& spectrum;
+    FFTSpectrum& refSpectrum;
 };

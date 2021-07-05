@@ -2,13 +2,13 @@
 
 #include <juce_gui_extra/juce_gui_extra.h>
 
-class Spectrum;
+class AdditiveSpectrum;
 class SpectrumEditor;
 
 class TimeSlider : public juce::Component
 {
 public:
-    TimeSlider(Spectrum& spectrum, SpectrumEditor& spectrumEditor);
+    TimeSlider(AdditiveSpectrum& spectrum, SpectrumEditor& spectrumEditor);
 
     void paint (juce::Graphics& g) override;
 
@@ -30,8 +30,8 @@ private:
 
     const float playSamplePeriod;// in seconds
     juce::Array<float> keyFrameTimes;
-    
-    Spectrum& spectrum;
+
+    AdditiveSpectrum& spectrum;
     SpectrumEditor& spectrumEditor;
     class PlayerTimer : juce::Timer
     {
@@ -40,7 +40,7 @@ private:
         void timerCallback() override;
         void play();
         TimeSlider* timeSlider;
-        Spectrum* spectrum;
+        AdditiveSpectrum* spectrum;
         int timerInterval;
     } playerTimer;
 

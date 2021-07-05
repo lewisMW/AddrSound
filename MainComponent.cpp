@@ -2,13 +2,14 @@
 
 //==============================================================================
 MainComponent::MainComponent()
-    : spectrum(30, 100, 1000, 10, 0.5f),
-      spectrumEditor(spectrum),
-      timeSlider(spectrum, spectrumEditor)
+    : additiveSpectrum(30, 440, 0.5f, 10),
+      refSpectrum(512, 512, 2),
+      spectrumEditor(additiveSpectrum, refSpectrum),
+      timeSlider(additiveSpectrum, spectrumEditor)
 {
     createWaveTable();
 
-    setSize (600, 400);
+    setSize (600, 425);
     setAudioChannels(0,2); // Only outputs
 
     setWantsKeyboardFocus(true);
@@ -19,7 +20,13 @@ MainComponent::MainComponent()
     addAndMakeVisible(timeSlider);
     addMouseListener(&timeSlider, false);
 
-    setKeyboardNoteBindings();
+    addAndMakeVisible(toolsButton);
+    toolsButton.onChange = [this] {toolsMenuSelect();};
+
+    addAndMakeVisible(refAudioPositionSlider);
+    refAudioPositionSlider.setEnabled(false);
+
+    setKeyboardNoteBindings();    
 }
 
 MainComponent::~MainComponent()
@@ -45,16 +52,16 @@ void MainComponent::createWaveTable()
     samples[tableSize] = samples[0];
 }
 
-void MainComponent::prepareToPlay (int samplesPerBlockExpected, double sampleRate)
+void MainComponent::prepareToPlay (int /*samplesPerBlockExpected*/, double sampleRate)
 {
-    for(auto i=0; i < spectrum.getNFreqs(); i++)
+    for(auto i=0; i < additiveSpectrum.getNFreqs(); i++)
     {
         auto* oscillator = new WavetableOscillator(sineTable, (float) sampleRate);
-        oscillator->setAmplitude(spectrum.getMagnitude(i));
-        oscillator->setFrequency(spectrum.getFrequency(i));
+        oscillator->setAmplitude(additiveSpectrum.getMagnitude(i));
+        oscillator->setFrequency(additiveSpectrum.getFrequency(i));
         oscillators.add(oscillator);
     }
-    level = 0.5f / (float) spectrum.getNFreqs();
+    level = 0.5f / (float) additiveSpectrum.getNFreqs();
 }
 
 void MainComponent::getNextAudioBlock (const juce::AudioSourceChannelInfo& bufferToFill)
@@ -66,8 +73,8 @@ void MainComponent::getNextAudioBlock (const juce::AudioSourceChannelInfo& buffe
     for(auto oIndex=0; oIndex < oscillators.size(); oIndex++)
     {
         auto* oscillator = oscillators.getUnchecked(oIndex);
-        oscillator->setAmplitude(spectrum.getMagnitude(oIndex));
-        oscillator->setFrequency(spectrum.getFrequency(oIndex));
+        oscillator->setAmplitude(additiveSpectrum.getMagnitude(oIndex));
+        oscillator->setFrequency(additiveSpectrum.getFrequency(oIndex));
 
         for (auto sample = 0; sample < bufferToFill.numSamples; sample++)
         {
@@ -100,10 +107,79 @@ void MainComponent::resized()
 
     spectrumEditor.setBounds(50,50,400,300);
     timeSlider.setBounds(50,360,400,20);
+    toolsButton.setBounds(350, 10, 100, 30);
+    refAudioPositionSlider.setBounds(50, 400, 400, 20);
+}
+
+// Tools Menu:
+MainComponent::ToolsButton::ToolsButton()
+    : juce::ComboBox("Tools")
+{
+    setText("Tools");
+    addItem(juce::String("EQ"), ItemIDs::EQID);
+    addItem(juce::String("Distortion"), ItemIDs::DistortionID);
+    addItem(juce::String("Noise"), ItemIDs::NoiseID);
+    addItem(juce::String("Reverb"), ItemIDs::ReverbID);
+    addItem(juce::String("Load Reference File"), ItemIDs::LoadFileID);
+}
+void MainComponent::toolsMenuSelect()
+{
+    
+    ToolsButton::ItemIDs id = (ToolsButton::ItemIDs) toolsButton.getSelectedId();
+    switch (id)
+    {
+        case ToolsButton::ItemIDs::EQID:
+            break;
+        case ToolsButton::ItemIDs::DistortionID:
+            break;
+        case ToolsButton::ItemIDs::NoiseID:
+            break;
+        case ToolsButton::ItemIDs::ReverbID:
+            break;
+        case ToolsButton::ItemIDs::LoadFileID:   
+            loadReferenceFile();
+    }
+    toolsButton.setText("Tools");
+}
+void MainComponent::loadReferenceFile()
+{
+    juce::FileChooser fC("Choose Reference Audio File");
+    if (fC.browseForFileToOpen())
+    {
+        juce::File file = fC.getResult();
+        juce::AudioFormatManager formatManager;
+        formatManager.registerBasicFormats();
+        juce::AudioFormatReader* reader = formatManager.createReaderFor(file);
+        if (reader != nullptr)
+        {
+            refSpectrum.removeAudioSource();
+            refAudioSource.reset(new juce::AudioFormatReaderSource(reader, true));
+
+            refSpectrum.addAudioSource(refAudioSource.get());
+            refSpectrum.setTime(0.0f);
+            spectrumEditor.addRefSpectrum();
+            spectrumEditor.repaint();
+
+            refAudioPositionSlider.setValue(0.0);
+            refAudioPositionSlider.setRange(0.0, refSpectrum.getDuration(), refSpectrum.getWindowPeriodSeconds());
+            refAudioPositionSlider.onValueChange = [this] {
+                refSpectrum.setTime((float) refAudioPositionSlider.getValue());
+                spectrumEditor.refreshRefPoints();
+                spectrumEditor.repaint();
+            };
+            refAudioPositionSlider.setEnabled(true);
+        }
+        else
+        {
+            juce::AlertWindow::showMessageBox(juce::AlertWindow::AlertIconType::WarningIcon,
+            "Error Reading Audio File",
+                "The file selected (" + file.getFileName() + ") could not be read as an audio file.");
+        }
+    }
 }
 
 //==============================================================================
-bool MainComponent::keyPressed(const juce::KeyPress& key, juce::Component* originatingComponent)
+bool MainComponent::keyPressed(const juce::KeyPress& key, juce::Component* /*originatingComponent*/)
 {
     auto keyCode = key.getKeyCode();
     if (keyboardNoteBindings.contains(keyCode))
@@ -111,7 +187,7 @@ bool MainComponent::keyPressed(const juce::KeyPress& key, juce::Component* origi
         auto noteOffset = keyboardNoteBindings[keyCode];
         auto midiNote = 69 + noteOffset;
         auto freq = 440.0*pow(2.0, (midiNote-69.0)/12.0);
-        spectrum.setFirstFrequency((float) freq);
+        additiveSpectrum.setFirstFrequency((float) freq);
         timeSlider.playSound();
     }
     return true;

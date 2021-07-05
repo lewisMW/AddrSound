@@ -3,10 +3,10 @@
 #include <juce_gui_extra/juce_gui_extra.h>
 
 #include "TimeSlider.h"
-#include "Spectrum.h"
+#include "AdditiveSpectrum.h"
 #include "SpectrumEditor.h"
 
-TimeSlider::TimeSlider(Spectrum& spectrum, SpectrumEditor& spectrumEditor)
+TimeSlider::TimeSlider(AdditiveSpectrum& spectrum, SpectrumEditor& spectrumEditor)
     : spectrum(spectrum), spectrumEditor(spectrumEditor),
       playSamplePeriod(spectrum.getDuration()/(4*(spectrum.getNKeyFrames())) ),
       playerTimer(this)
@@ -61,7 +61,7 @@ void TimeSlider::mouseDrag (const juce::MouseEvent& event)
     const juce::ModifierKeys& modifierKeys = event.mods;
     if (modifierKeys.isLeftButtonDown())
     {
-        if (spectrum.getPlayState() != Spectrum::PlayState::PlayingSound)
+        if (spectrum.getPlayState() != AdditiveSpectrum::PlayState::PlayingSound)
         {
             float time = spectrum.getTime();
             float duration = spectrum.getDuration();
@@ -83,7 +83,7 @@ void TimeSlider::mouseDrag (const juce::MouseEvent& event)
 
 void TimeSlider::mouseUp (const juce::MouseEvent& event) 
 {
-    if (spectrum.getPlayState() != Spectrum::PlayState::PlayingSound)
+    if (spectrum.getPlayState() != AdditiveSpectrum::PlayState::PlayingSound)
     {
         // Get nearest keyframe grid time:
         float time = spectrum.getTime();
@@ -160,18 +160,18 @@ void TimeSlider::PlayerTimer::timerCallback()
     else
     {
         stopTimer();
-        spectrum->setPlayState(Spectrum::PlayState::Stopped);
+        spectrum->setPlayState(AdditiveSpectrum::PlayState::Stopped);
     }
     timeSlider->repaintAll();
 }
 void TimeSlider::PlayerTimer::play()
 {   
-    if (spectrum->getPlayState() == Spectrum::PlayState::PlayingSound)
+    if (spectrum->getPlayState() == AdditiveSpectrum::PlayState::PlayingSound)
     {
         stopTimer();
     }
     spectrum->setTime(0.0f);
-    spectrum->setPlayState(Spectrum::PlayState::PlayingSound);
+    spectrum->setPlayState(AdditiveSpectrum::PlayState::PlayingSound);
     startTimer(timerInterval);
     timeSlider->repaintAll();
 }

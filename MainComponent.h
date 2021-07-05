@@ -7,8 +7,9 @@
 #include <juce_gui_extra/juce_gui_extra.h>
 #include <juce_audio_utils/juce_audio_utils.h>
 
-#include "Spectrum.h"
+#include "AdditiveSpectrum.h"
 #include "SpectrumEditor.h"
+#include "FFTSpectrum.h"
 #include "TimeSlider.h"
 #include "WaveTableOscillator.h"
 
@@ -33,23 +34,43 @@ public:
     //==============================================================================
     void paint (juce::Graphics&) override;
     void resized() override;
+
+    void toolsMenuSelect();
+    void loadReferenceFile();
     //==============================================================================
     bool keyPressed(const juce::KeyPress&, juce::Component*) override;
     void setKeyboardNoteBindings();
 
+    
+
+
 private:
     //==============================================================================   
+    // 1. Audio :
     float level = 0.0f;
     juce::OwnedArray<WavetableOscillator> oscillators;
     juce::AudioSampleBuffer sineTable;
     const unsigned int tableSize = 128;
 
-    Spectrum spectrum;
+    // 2. Data :
+    AdditiveSpectrum additiveSpectrum;
+    FFTSpectrum refSpectrum;
 
-    // GUI Elements:
+    // 3. GUI Elements:
     SpectrumEditor spectrumEditor;
     TimeSlider timeSlider;
+    class ToolsButton : public juce::ComboBox
+    {
+    public:
+        ToolsButton();
+        enum ItemIDs {EQID=1, DistortionID, NoiseID, ReverbID, LoadFileID};
+    } toolsButton;
+    juce::Slider refAudioPositionSlider;
 
+    // 4. Audio Reference File Reading
+    std::unique_ptr<juce::AudioFormatReaderSource> refAudioSource;
+    
+    // 5. Other:
     juce::HashMap<int, int> keyboardNoteBindings;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)

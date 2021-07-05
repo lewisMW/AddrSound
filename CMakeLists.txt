@@ -62,6 +62,8 @@ target_sources(AddrSound
         Main.cpp
         MainComponent.cpp
         Spectrum.cpp
+        AdditiveSpectrum.cpp
+        FFTSpectrum.cpp
         SpectrumEditor.cpp
         TimeSlider.cpp)
 
