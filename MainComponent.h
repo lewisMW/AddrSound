@@ -65,10 +65,27 @@ private:
         ToolsButton();
         enum ItemIDs {EQID=1, DistortionID, NoiseID, ReverbID, LoadFileID};
     } toolsButton;
+
     juce::Slider refAudioPositionSlider;
 
     // 4. Audio Reference File Reading
-    std::unique_ptr<juce::AudioFormatReaderSource> refAudioSource;
+    struct RefAudioPlayer
+    {
+        RefAudioPlayer();
+        std::atomic<bool> playing;
+        int samplesToPlay;
+        const float previewSeconds;
+        std::unique_ptr<juce::AudioFormatReaderSource> refPlaybackSource;
+        juce::AudioSourceChannelInfo refPlaybackSourceInfo;
+        std::shared_ptr<juce::AudioSampleBuffer> refBuffer;
+        int fs;
+        juce::int64 nSamples;
+        float duration;
+        void addAudioSource(juce::AudioFormatReader* reader);
+        void removeAudioSource();
+        void play(int startSample);
+        void pause();
+    } refAudioPlayer;
     
     // 5. Other:
     juce::HashMap<int, int> keyboardNoteBindings;

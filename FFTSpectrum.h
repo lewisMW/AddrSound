@@ -22,10 +22,12 @@ public:
     float getMagnitude(int fIndex) override;
 
     float getWindowPeriodSeconds();
+    
+    juce::AudioSourceChannelInfo* getInputBufferContainer();
 
     void setTime(float t) override;
 
-    void addAudioSource(juce::AudioFormatReaderSource* source);
+    void addAudioSource(juce::AudioFormatReader* reader, bool ownsReader);
 
     void removeAudioSource();
 
@@ -42,7 +44,7 @@ private:
     float fs;
 
     juce::int64 nTotalSamples;
-    juce::AudioFormatReaderSource* audioSource;
+    std::unique_ptr<juce::AudioFormatReaderSource> audioSource;
     juce::AudioSourceChannelInfo inputBufferInfo;
 
     juce::Array<std::complex<float>> fftSpectrumArray;

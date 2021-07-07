@@ -16,6 +16,7 @@ FFTSpectrum::FFTSpectrum(int nFq, int windowSamples, int downSamplingRate)
 FFTSpectrum::~FFTSpectrum()
 {
     delete inputBufferInfo.buffer;
+    removeAudioSource();
 }
 
 float FFTSpectrum::getFrequency(int index) 
@@ -30,20 +31,20 @@ float FFTSpectrum::getMagnitude(int fIndex)
 
 float FFTSpectrum::getWindowPeriodSeconds() {return (float) inputBufferSize / fs;}
 
-//virtual void setTime(float t);
+juce::AudioSourceChannelInfo* FFTSpectrum::getInputBufferContainer() {return &inputBufferInfo;}
 
-void FFTSpectrum::addAudioSource(juce::AudioFormatReaderSource* source)
+void FFTSpectrum::addAudioSource(juce::AudioFormatReader* reader, bool ownsReader)
 {
-    fs = (float) source->getAudioFormatReader()->sampleRate;
-    nTotalSamples = source->getAudioFormatReader()->lengthInSamples;
+    audioSource.reset(new juce::AudioFormatReaderSource(reader, ownsReader));
+    fs = (float) audioSource->getAudioFormatReader()->sampleRate;
+    nTotalSamples = audioSource->getAudioFormatReader()->lengthInSamples;
     duration = (float) nTotalSamples / fs;
 
-    source->prepareToPlay(fftWindowSampleN, (double) fs);
-    audioSource = source;
+    audioSource->prepareToPlay(fftWindowSampleN, (double) fs);
 }
 void FFTSpectrum::removeAudioSource()
 {
-    if (audioSource) audioSource->releaseResources();
+    if (audioSource.get()) audioSource->releaseResources();
     playState = Stopped;
     audioSource = nullptr;
 }
@@ -52,7 +53,6 @@ void FFTSpectrum::setTime(float t)
 {
     juce::int64 sampleIndex = (juce::int64) (t * fs);
     audioSource->setNextReadPosition(sampleIndex);
-    refreshFFT();
 }
 
 void FFTSpectrum::refreshFFT()

@@ -25,12 +25,14 @@ MainComponent::MainComponent()
 
     addAndMakeVisible(refAudioPositionSlider);
     refAudioPositionSlider.setEnabled(false);
+    addMouseListener(&refAudioPositionSlider, false);
 
     setKeyboardNoteBindings();    
 }
 
 MainComponent::~MainComponent()
 {
+    refAudioPlayer.removeAudioSource();
     shutdownAudio();
 }
 
@@ -70,7 +72,26 @@ void MainComponent::getNextAudioBlock (const juce::AudioSourceChannelInfo& buffe
     auto* rightBuffer = bufferToFill.buffer->getWritePointer(1,bufferToFill.startSample);
     bufferToFill.clearActiveBufferRegion();
 
-    for(auto oIndex=0; oIndex < oscillators.size(); oIndex++)
+    int nOscillators = oscillators.size();
+
+    std::shared_ptr<juce::AudioSampleBuffer> refBufferBackup;
+    const float* ref = nullptr;
+    int refSample = 0;
+
+    if (refAudioPlayer.playing.load(std::memory_order_acquire) == true) // play reference audio
+    {
+        refBufferBackup = std::atomic_load(&refAudioPlayer.refBuffer); 
+        ref = refBufferBackup->getReadPointer(0);
+        refSample = refBufferBackup->getNumSamples() - refAudioPlayer.samplesToPlay;
+        if (refSample < 0 || refAudioPlayer.samplesToPlay <= 0)
+        {
+            refAudioPlayer.samplesToPlay = refBufferBackup->getNumSamples();
+            refSample = 0;
+        }
+        nOscillators = 1; // Only need one 'oscillator', i.e. sound source!
+    }
+
+    for(auto oIndex=0; oIndex < nOscillators; oIndex++)
     {
         auto* oscillator = oscillators.getUnchecked(oIndex);
         oscillator->setAmplitude(additiveSpectrum.getMagnitude(oIndex));
@@ -78,18 +99,69 @@ void MainComponent::getNextAudioBlock (const juce::AudioSourceChannelInfo& buffe
 
         for (auto sample = 0; sample < bufferToFill.numSamples; sample++)
         {
-            auto current = oscillator->getNextSample() * level;
+            auto current = 0.0f; 
+            if(ref != nullptr) // Playing reference source
+            {
+                if (refAudioPlayer.samplesToPlay <= 0)
+                {
+                    refAudioPlayer.samplesToPlay = refBufferBackup->getNumSamples();
+                    refSample = 0;
+                }
+                
+                current += ref[refSample++];
+                refAudioPlayer.samplesToPlay--;
+            }
+            else // Playing additive oscillators
+            {
+                current += oscillator->getNextSample() * level;
+            }
             leftBuffer[sample] += current;
             rightBuffer[sample] += current;
         }
     }
+
 }
+
+void MainComponent::RefAudioPlayer::play(int startSample)
+{
+    refPlaybackSource->setNextReadPosition(startSample);
+    refPlaybackSource->getNextAudioBlock(refPlaybackSourceInfo);
+    playing.store(true, std::memory_order_release);
+}
+void MainComponent::RefAudioPlayer::pause()
+{
+    playing.store(false, std::memory_order_release);
+}
+
+void MainComponent::RefAudioPlayer::addAudioSource(juce::AudioFormatReader* reader)
+{
+    playing.store(false, std::memory_order_release);
+    refPlaybackSource.reset(new juce::AudioFormatReaderSource(reader, false));
+    fs = (int) refPlaybackSource->getAudioFormatReader()->sampleRate;
+    nSamples = refPlaybackSource->getAudioFormatReader()->lengthInSamples;
+    duration = (float) nSamples / fs;
+
+    int bufferSize = (int) (previewSeconds * fs); // not an attribute of RefAudioPlayer to avoid thread conflicts
+    refPlaybackSource->prepareToPlay(bufferSize, (double) fs);
+    std::shared_ptr<juce::AudioSampleBuffer> tempBufferPointer(new juce::AudioSampleBuffer(2, bufferSize));
+    refPlaybackSourceInfo.buffer = tempBufferPointer.get();
+    refPlaybackSourceInfo.numSamples = bufferSize;
+    refPlaybackSourceInfo.startSample = 0;
+    std::atomic_store(&refBuffer, tempBufferPointer);
+}
+void MainComponent::RefAudioPlayer::removeAudioSource()
+{
+    if (refPlaybackSource.get()) refPlaybackSource->releaseResources();
+}
+MainComponent::RefAudioPlayer::RefAudioPlayer()
+    : playing(false), samplesToPlay(0), previewSeconds(0.2f) {}
 
 
 void MainComponent::releaseResources()
 {
     juce::Logger::getCurrentLogger()->writeToLog ("Releasing audio resources");
 }
+
 
 
 //==============================================================================
@@ -110,6 +182,7 @@ void MainComponent::resized()
     toolsButton.setBounds(350, 10, 100, 30);
     refAudioPositionSlider.setBounds(50, 400, 400, 20);
 }
+
 
 // Tools Menu:
 MainComponent::ToolsButton::ToolsButton()
@@ -146,6 +219,7 @@ void MainComponent::loadReferenceFile()
     juce::FileChooser fC("Choose Reference Audio File");
     if (fC.browseForFileToOpen())
     {
+        refAudioPositionSlider.setEnabled(false);
         juce::File file = fC.getResult();
         juce::AudioFormatManager formatManager;
         formatManager.registerBasicFormats();
@@ -153,19 +227,26 @@ void MainComponent::loadReferenceFile()
         if (reader != nullptr)
         {
             refSpectrum.removeAudioSource();
-            refAudioSource.reset(new juce::AudioFormatReaderSource(reader, true));
-
-            refSpectrum.addAudioSource(refAudioSource.get());
+            refSpectrum.addAudioSource(reader, true);
             refSpectrum.setTime(0.0f);
+            refSpectrum.refreshFFT();
             spectrumEditor.addRefSpectrum();
             spectrumEditor.repaint();
+            
+            refAudioPlayer.removeAudioSource();
+            refAudioPlayer.addAudioSource(reader);
 
             refAudioPositionSlider.setValue(0.0);
             refAudioPositionSlider.setRange(0.0, refSpectrum.getDuration(), refSpectrum.getWindowPeriodSeconds());
             refAudioPositionSlider.onValueChange = [this] {
-                refSpectrum.setTime((float) refAudioPositionSlider.getValue());
+                refSpectrum.setTime((float) refAudioPositionSlider.getValue());                
+                refSpectrum.refreshFFT();
                 spectrumEditor.refreshRefPoints();
                 spectrumEditor.repaint();
+                refAudioPlayer.play((int) (refAudioPositionSlider.getValue()*refAudioPlayer.fs));
+            };
+            refAudioPositionSlider.onDragEnd = [this] {
+                refAudioPlayer.pause();
             };
             refAudioPositionSlider.setEnabled(true);
         }
