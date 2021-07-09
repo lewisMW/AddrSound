@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <juce_audio_utils/juce_audio_utils.h>
+#include <PeakFinder.h>
 
 #include "Spectrum.h"
 
@@ -18,7 +19,6 @@ public:
     ~FFTSpectrum();
 
     float getFrequency(int index) override;
-
     float getMagnitude(int fIndex) override;
 
     float getWindowPeriodSeconds();
@@ -33,11 +33,18 @@ public:
 
     void refreshFFT();
 
+    struct FFTPeaks
+    {
+        std::vector<int> indexs;
+        std::vector<float> values;
+    };
+    void calcPeaks(FFTPeaks& peaks);
+
+private:
     void hanningWindow(float* x, int N);
 
     void FFT(const float* x_raw, std::complex<float>* X, int nDFTSamples, int nSignalSamples);
 
-private:
     int fftWindowSampleN; // Must be power of 2
     int downSamplingRate; // Used to restrict the spectrum below fs/2
     int inputBufferSize;
@@ -49,4 +56,5 @@ private:
 
     juce::Array<std::complex<float>> fftSpectrumArray;
     juce::Array<float> fftSpectrumArrayAbs;
+    
 };

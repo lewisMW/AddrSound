@@ -199,3 +199,15 @@ void FFTSpectrum::FFT(const float* x_raw, std::complex<float>* X, int nDFTSample
         }
     }
 }
+
+
+void FFTSpectrum::calcPeaks(FFTPeaks& peaks)
+{
+    float* spectrumRaw = fftSpectrumArrayAbs.getRawDataPointer();
+    int spectrumLen = fftSpectrumArrayAbs.size();
+    std::vector<float> spectrum(spectrumRaw, spectrumRaw + spectrumLen);
+    PeakFinder::findPeaks(spectrum, peaks.indexs, false);
+    for (int& index : peaks.indexs) peaks.values.push_back(spectrum[index]);
+
+    DBG(juce::String(peaks.indexs.size()) + " peaks found!");
+}

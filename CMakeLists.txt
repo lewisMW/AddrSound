@@ -26,6 +26,8 @@ project(AddrSound VERSION 1.0.0)
 # or
 add_subdirectory(JUCE)                    # If you've put JUCE in a subdirectory called JUCE
 
+add_subdirectory(find-peaks)
+
 # If your app depends the VST2 SDK, perhaps to host VST2 plugins, CMake needs to be told where
 # to find the SDK on your system. This setup should be done before calling `juce_add_gui_app`.
 
@@ -102,6 +104,7 @@ target_link_libraries(AddrSound
         # GuiAppData            # If we'd created a binary data target, we'd link to it here
         juce::juce_gui_extra
         juce::juce_audio_utils
+        find-peaks
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags

@@ -57,7 +57,11 @@ void SpectrumEditor::paint (juce::Graphics& g)
         // Draw path
         updateDisplayCoords(spectrumPoints[i]);
         juce::Point<float>& coords = spectrumPoints[i]->displayCoords;
+        juce::Point<float> bottom(coords);
+        bottom.y = getHeight() - bottomPadding;
+        spectrumPath.lineTo(bottom);
         spectrumPath.lineTo(coords);
+        spectrumPath.lineTo(bottom);
         
         // Draw circles as points:
         if (spectrumPoints[i]->selected)

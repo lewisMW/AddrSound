@@ -47,7 +47,7 @@ public:
 private:
     //==============================================================================   
     // 1. Audio :
-    float level = 0.0f;
+    float level;
     juce::OwnedArray<WavetableOscillator> oscillators;
     juce::AudioSampleBuffer sineTable;
     const unsigned int tableSize = 128;
@@ -68,24 +68,11 @@ private:
 
     juce::Slider refAudioPositionSlider;
 
-    // 4. Audio Reference File Reading
-    struct RefAudioPlayer
-    {
-        RefAudioPlayer();
-        std::atomic<bool> playing;
-        int samplesToPlay;
-        const float previewSeconds;
-        std::unique_ptr<juce::AudioFormatReaderSource> refPlaybackSource;
-        juce::AudioSourceChannelInfo refPlaybackSourceInfo;
-        std::shared_ptr<juce::AudioSampleBuffer> refBuffer;
-        int fs;
-        juce::int64 nSamples;
-        float duration;
-        void addAudioSource(juce::AudioFormatReader* reader);
-        void removeAudioSource();
-        void play(int startSample);
-        void pause();
-    } refAudioPlayer;
+    // 4. Audio Reference File Playing
+    std::atomic<bool> refPlaying;
+    std::shared_ptr<FFTSpectrum::FFTPeaks> fftPeaks;
+    std::array<std::shared_ptr<FFTSpectrum::FFTPeaks>,8> circularPointerBuffer;
+    int circularPointerBufferIndex;
     
     // 5. Other:
     juce::HashMap<int, int> keyboardNoteBindings;

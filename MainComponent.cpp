@@ -7,6 +7,8 @@ MainComponent::MainComponent()
       spectrumEditor(additiveSpectrum, refSpectrum),
       timeSlider(additiveSpectrum, spectrumEditor)
 {
+    level = 0.0f;
+
     createWaveTable();
 
     setSize (600, 425);
@@ -23,6 +25,7 @@ MainComponent::MainComponent()
     addAndMakeVisible(toolsButton);
     toolsButton.onChange = [this] {toolsMenuSelect();};
 
+    circularPointerBufferIndex = 0;
     addAndMakeVisible(refAudioPositionSlider);
     refAudioPositionSlider.setEnabled(false);
     addMouseListener(&refAudioPositionSlider, false);
@@ -32,7 +35,6 @@ MainComponent::MainComponent()
 
 MainComponent::~MainComponent()
 {
-    refAudioPlayer.removeAudioSource();
     shutdownAudio();
 }
 
@@ -72,89 +74,52 @@ void MainComponent::getNextAudioBlock (const juce::AudioSourceChannelInfo& buffe
     auto* rightBuffer = bufferToFill.buffer->getWritePointer(1,bufferToFill.startSample);
     bufferToFill.clearActiveBufferRegion();
 
-    int nOscillators = oscillators.size();
-
-    std::shared_ptr<juce::AudioSampleBuffer> refBufferBackup;
-    const float* ref = nullptr;
-    int refSample = 0;
-
-    if (refAudioPlayer.playing.load(std::memory_order_acquire) == true) // play reference audio
+    if (refPlaying.load(std::memory_order_acquire) == true) // Play reference audio
     {
-        refBufferBackup = std::atomic_load(&refAudioPlayer.refBuffer); 
-        ref = refBufferBackup->getReadPointer(0);
-        refSample = refBufferBackup->getNumSamples() - refAudioPlayer.samplesToPlay;
-        if (refSample < 0 || refAudioPlayer.samplesToPlay <= 0)
+        std::shared_ptr<FFTSpectrum::FFTPeaks> peaks = std::atomic_load_explicit(&fftPeaks, std::memory_order_acquire);
+        auto nOscillators = std::min<int>(oscillators.size(), (int) peaks->indexs.size());
+        for(auto oIndex=0; oIndex < nOscillators; oIndex++)
         {
-            refAudioPlayer.samplesToPlay = refBufferBackup->getNumSamples();
-            refSample = 0;
-        }
-        nOscillators = 1; // Only need one 'oscillator', i.e. sound source!
-    }
+            auto peakIndex = peaks->indexs[oIndex];
+            auto peakValue = peaks->values[oIndex];
+            auto* oscillator = oscillators.getUnchecked(oIndex);
+            oscillator->setAmplitude(peakValue);
+            oscillator->setFrequency(refSpectrum.getFrequency(peakIndex));
 
-    for(auto oIndex=0; oIndex < nOscillators; oIndex++)
-    {
-        auto* oscillator = oscillators.getUnchecked(oIndex);
-        oscillator->setAmplitude(additiveSpectrum.getMagnitude(oIndex));
-        oscillator->setFrequency(additiveSpectrum.getFrequency(oIndex));
-
-        for (auto sample = 0; sample < bufferToFill.numSamples; sample++)
-        {
-            auto current = 0.0f; 
-            if(ref != nullptr) // Playing reference source
+            for (auto sample = 0; sample < bufferToFill.numSamples; sample++)
             {
-                if (refAudioPlayer.samplesToPlay <= 0)
-                {
-                    refAudioPlayer.samplesToPlay = refBufferBackup->getNumSamples();
-                    refSample = 0;
-                }
-                
-                current += ref[refSample++];
-                refAudioPlayer.samplesToPlay--;
-            }
-            else // Playing additive oscillators
-            {
+                auto current = 0.0f;
                 current += oscillator->getNextSample() * level;
+                leftBuffer[sample] += current;
+                rightBuffer[sample] += current;
             }
-            leftBuffer[sample] += current;
-            rightBuffer[sample] += current;
+        }
+    }
+    else // Play additive composition (Fourier Series)
+    {
+        auto nOscillators = oscillators.size();
+        for(auto oIndex=0; oIndex < nOscillators; oIndex++)
+        {
+            auto* oscillator = oscillators.getUnchecked(oIndex);
+            oscillator->setAmplitude(additiveSpectrum.getMagnitude(oIndex));
+            oscillator->setFrequency(additiveSpectrum.getFrequency(oIndex));
+
+            for (auto sample = 0; sample < bufferToFill.numSamples; sample++)
+            {
+                auto current = 0.0f; 
+                // Playing additive oscillators
+                
+                current += oscillator->getNextSample() * level;
+                
+                leftBuffer[sample] += current;
+                rightBuffer[sample] += current;
+            }
         }
     }
 
-}
+    
 
-void MainComponent::RefAudioPlayer::play(int startSample)
-{
-    refPlaybackSource->setNextReadPosition(startSample);
-    refPlaybackSource->getNextAudioBlock(refPlaybackSourceInfo);
-    playing.store(true, std::memory_order_release);
 }
-void MainComponent::RefAudioPlayer::pause()
-{
-    playing.store(false, std::memory_order_release);
-}
-
-void MainComponent::RefAudioPlayer::addAudioSource(juce::AudioFormatReader* reader)
-{
-    playing.store(false, std::memory_order_release);
-    refPlaybackSource.reset(new juce::AudioFormatReaderSource(reader, false));
-    fs = (int) refPlaybackSource->getAudioFormatReader()->sampleRate;
-    nSamples = refPlaybackSource->getAudioFormatReader()->lengthInSamples;
-    duration = (float) nSamples / fs;
-
-    int bufferSize = (int) (previewSeconds * fs); // not an attribute of RefAudioPlayer to avoid thread conflicts
-    refPlaybackSource->prepareToPlay(bufferSize, (double) fs);
-    std::shared_ptr<juce::AudioSampleBuffer> tempBufferPointer(new juce::AudioSampleBuffer(2, bufferSize));
-    refPlaybackSourceInfo.buffer = tempBufferPointer.get();
-    refPlaybackSourceInfo.numSamples = bufferSize;
-    refPlaybackSourceInfo.startSample = 0;
-    std::atomic_store(&refBuffer, tempBufferPointer);
-}
-void MainComponent::RefAudioPlayer::removeAudioSource()
-{
-    if (refPlaybackSource.get()) refPlaybackSource->releaseResources();
-}
-MainComponent::RefAudioPlayer::RefAudioPlayer()
-    : playing(false), samplesToPlay(0), previewSeconds(0.2f) {}
 
 
 void MainComponent::releaseResources()
@@ -233,20 +198,26 @@ void MainComponent::loadReferenceFile()
             spectrumEditor.addRefSpectrum();
             spectrumEditor.repaint();
             
-            refAudioPlayer.removeAudioSource();
-            refAudioPlayer.addAudioSource(reader);
 
             refAudioPositionSlider.setValue(0.0);
-            refAudioPositionSlider.setRange(0.0, refSpectrum.getDuration(), refSpectrum.getWindowPeriodSeconds());
+            refAudioPositionSlider.setRange(0.0, refSpectrum.getDuration(), refSpectrum.getWindowPeriodSeconds()/4);
             refAudioPositionSlider.onValueChange = [this] {
                 refSpectrum.setTime((float) refAudioPositionSlider.getValue());                
                 refSpectrum.refreshFFT();
+
+                std::shared_ptr<FFTSpectrum::FFTPeaks> peaks(new FFTSpectrum::FFTPeaks());
+                refSpectrum.calcPeaks(*peaks);
+                std::atomic_store_explicit(&fftPeaks,peaks, std::memory_order_release);
+                circularPointerBuffer[circularPointerBufferIndex++] = peaks;
+                circularPointerBufferIndex %= circularPointerBuffer.size();
+                refPlaying.store(true, std::memory_order_release);
+
                 spectrumEditor.refreshRefPoints();
                 spectrumEditor.repaint();
-                refAudioPlayer.play((int) (refAudioPositionSlider.getValue()*refAudioPlayer.fs));
             };
+            
             refAudioPositionSlider.onDragEnd = [this] {
-                refAudioPlayer.pause();
+                refPlaying.store(false, std::memory_order_release);
             };
             refAudioPositionSlider.setEnabled(true);
         }

@@ -12,6 +12,9 @@ public:
     virtual float getMagnitude(int fIndex) = 0;
     virtual void setMagnitude(int /*fIndex*/, float /*mag*/) {}
 
+    virtual float nextFrequency();
+    virtual float nextMagnitude();
+
     virtual void setTime(float t);
     float getTime();
 
@@ -23,9 +26,12 @@ public:
 
 protected:
 
-    int nFreqs;
+    const int nFreqs;
     float duration; // in seconds
     float time;
+
+    int iterFreqIndex;
+    int iterMagIndex;
 
     PlayState playState;
 };
