@@ -25,6 +25,8 @@ public:
     TimeSlider* timeSlider = nullptr;
     void updateKeyFrameTimes(juce::Array<float>& arrayOfKFTimes);
     void deleteKeyframe(float t);
+    void copyKeyFrame();
+    void pasteKeyFrame();
 
     void saveSpectrum(juce::FileOutputStream& outputStream);
     void loadSpectrum(juce::FileInputStream& inputStream);
@@ -39,13 +41,15 @@ private:
         bool operator<(KeyFrame a);
 
         KeyFrame* getNextActive();
+        KeyFrame* getPrevActive();
         float getTimeStamp();
         int getIndex();
         
         void setMagnitude(int fIndex, float mag);
-        float getMagnitude(int fIndex, bool trueValue = false);
-        
-        void setActive(bool refreshLinks = true);
+        float getMagnitude(int fIndex, float t, bool trueValue = false);
+        void copyFrom(KeyFrame* toCopy, float t);
+
+        void setActive();
         void removeActive();
         bool getIsActive();
 
@@ -61,12 +65,13 @@ private:
         KeyFrame* prevActive;
         const AdditiveSpectrum* spectrum;
 
-        inline float interpolate(int fIndex, KeyFrame* left, KeyFrame* right);
+        inline float interpolate(int fIndex, float atTime, KeyFrame* left, KeyFrame* right);
     };
     
     int nKeyFrames;
     juce::OwnedArray<KeyFrame> keyFrames;
     int keyFrameIndex;
+    KeyFrame* copiedKeyFrame;
 
     float noteFreq;
 

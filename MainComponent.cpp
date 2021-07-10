@@ -259,15 +259,32 @@ void MainComponent::loadReferenceFile()
 bool MainComponent::keyPressed(const juce::KeyPress& key, juce::Component* /*originatingComponent*/)
 {
     auto keyCode = key.getKeyCode();
-    if (keyboardNoteBindings.contains(keyCode))
+    
+    juce::ModifierKeys keyMods = key.getModifiers();
+    if (keyMods.isCommandDown()) // (CTRL or command key) Copy and paste keyframes
+    {
+        if (keyCode == 67) // 'c' copy
+        {
+            additiveSpectrum.copyKeyFrame();
+        }
+        else if (keyCode == 86) // 'v' paste
+        {
+            additiveSpectrum.pasteKeyFrame();
+            spectrumEditor.refreshPoints();
+            spectrumEditor.repaint();
+            timeSlider.repaint();
+        }
+    }
+    else if (keyboardNoteBindings.contains(keyCode)) // Play musical note
     {
         auto noteOffset = keyboardNoteBindings[keyCode];
         auto midiNote = 69 + noteOffset;
         auto freq = 440.0*pow(2.0, (midiNote-69.0)/12.0);
         additiveSpectrum.setFirstFrequency((float) freq);
         timeSlider.playSound();
+        return true;
     }
-    return true;
+    return false;
 }
 
 void MainComponent::setKeyboardNoteBindings()
