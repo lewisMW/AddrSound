@@ -8,13 +8,9 @@ SpectrumEditor::SpectrumEditor(AdditiveSpectrum& spectrum, FFTSpectrum& refSpect
     : spectrum(spectrum),
       refSpectrum(refSpectrum), refDisplayOffset(0.0f), refDisplayScale(1.0f)
 {
-    // Initialise spectrum points:
-    for (auto i = 0; i < spectrum.getNFreqs(); i++)
-    {
-        SpectrumPoint* point = new SpectrumPoint((int) i, spectrum);
-        spectrumPoints.add(point);
-    }
+    initPoints();
 }
+
 
 
 
@@ -197,6 +193,17 @@ void SpectrumEditor::refreshPoints(bool ref, Spectrum::Peaks* peaks)
             auto p = points[i];
             p->fromSpectrum();
         }
+    }
+}
+
+void SpectrumEditor::initPoints()
+{
+    // Initialise spectrum points:
+    spectrumPoints.clear(true); // In the case of reinitialising
+    for (auto i = 0; i < spectrum.getNFreqs(); i++)
+    {
+        SpectrumPoint* point = new SpectrumPoint((int) i, spectrum);
+        spectrumPoints.add(point);
     }
 }
 

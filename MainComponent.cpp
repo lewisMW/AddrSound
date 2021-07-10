@@ -116,9 +116,6 @@ void MainComponent::getNextAudioBlock (const juce::AudioSourceChannelInfo& buffe
             }
         }
     }
-
-    
-
 }
 
 
@@ -154,11 +151,10 @@ MainComponent::ToolsButton::ToolsButton()
     : juce::ComboBox("Tools")
 {
     setText("Tools");
-    addItem(juce::String("EQ"), ItemIDs::EQID);
-    addItem(juce::String("Distortion"), ItemIDs::DistortionID);
-    addItem(juce::String("Noise"), ItemIDs::NoiseID);
-    addItem(juce::String("Reverb"), ItemIDs::ReverbID);
-    addItem(juce::String("Load Reference File"), ItemIDs::LoadFileID);
+    addItem(juce::String("Save Spectrum"), ItemIDs::SaveID);
+    addItem(juce::String("Load Spectrum"), ItemIDs::LoadID);
+    addItem(juce::String("Load Reference Spectrum"), ItemIDs::LoadRefID);
+    
 }
 void MainComponent::toolsMenuSelect()
 {
@@ -166,18 +162,47 @@ void MainComponent::toolsMenuSelect()
     ToolsButton::ItemIDs id = (ToolsButton::ItemIDs) toolsButton.getSelectedId();
     switch (id)
     {
-        case ToolsButton::ItemIDs::EQID:
+        case ToolsButton::ItemIDs::SaveID:
+            saveSpectrum();
             break;
-        case ToolsButton::ItemIDs::DistortionID:
+        case ToolsButton::ItemIDs::LoadID:
+            loadSpectrum();
             break;
-        case ToolsButton::ItemIDs::NoiseID:
-            break;
-        case ToolsButton::ItemIDs::ReverbID:
-            break;
-        case ToolsButton::ItemIDs::LoadFileID:   
+        case ToolsButton::ItemIDs::LoadRefID:   
             loadReferenceFile();
     }
     toolsButton.setText("Tools");
+}
+void MainComponent::saveSpectrum()
+{
+    juce::FileChooser fC("Save spectrum file as", juce::File(), "*.addrsound");
+    if (fC.browseForFileToSave(true))
+    {
+        juce::File file = fC.getResult();
+        juce::FileOutputStream fileStream(file);
+        if (fileStream.openedOk())
+        {
+            fileStream.setPosition(0);
+            fileStream.truncate();
+            additiveSpectrum.saveSpectrum(fileStream);
+            fileStream.flush();
+        }
+    }
+}
+void MainComponent::loadSpectrum()
+{
+    deviceManager.closeAudioDevice(); // Stop sound thread to allow for the change of time-critical data structures:
+    juce::FileChooser fC("Load spectrum file", juce::File(), "*.addrsound");
+    if (fC.browseForFileToOpen())
+    {
+        juce::File file = fC.getResult();
+        juce::FileInputStream fileStream(file);
+        if (fileStream.openedOk()) additiveSpectrum.loadSpectrum(fileStream);
+    }
+    deviceManager.restartLastAudioDevice(); // Start sound thread again
+    spectrumEditor.initPoints();
+    spectrumEditor.repaint();
+    timeSlider.repaint();
 }
 void MainComponent::loadReferenceFile()
 {

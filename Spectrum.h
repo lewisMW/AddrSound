@@ -32,7 +32,7 @@ public:
 
 protected:
 
-    const int nFreqs;
+    int nFreqs;
     float duration; // in seconds
     float time;
 

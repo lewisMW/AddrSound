@@ -36,6 +36,8 @@ public:
     void resized() override;
 
     void toolsMenuSelect();
+    void saveSpectrum();
+    void loadSpectrum();
     void loadReferenceFile();
     //==============================================================================
     bool keyPressed(const juce::KeyPress&, juce::Component*) override;
@@ -63,7 +65,7 @@ private:
     {
     public:
         ToolsButton();
-        enum ItemIDs {EQID=1, DistortionID, NoiseID, ReverbID, LoadFileID};
+        enum ItemIDs {SaveID=1, LoadID, LoadRefID};
     } toolsButton;
 
     juce::Slider refAudioPositionSlider;

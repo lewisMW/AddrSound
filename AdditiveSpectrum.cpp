@@ -5,8 +5,11 @@
 
 AdditiveSpectrum::AdditiveSpectrum(int nFreqs, float noteFreq, float duration, int nKeyFrames)
         : Spectrum(nFreqs, duration), noteFreq(noteFreq),
-          nKeyFrames(nKeyFrames), keyFrameIndex(0)
+          nKeyFrames(nKeyFrames), keyFrameIndex(0),
+          timeFloatEpsilon(duration/(2*4*(nKeyFrames)))
 {
+    jassert(nKeyFrames > 0);
+
     // Initialise Default Keyframes of empty magnitude
     for (auto i=0; i<nKeyFrames; i++)
     {
@@ -35,7 +38,10 @@ void AdditiveSpectrum::setMagnitude(int fIndex, float mag)
     {
         playState = EditingSpectrum;
         if(keyFrameExists(keyFrameIndex))
+        {
+            keyFrames[keyFrameIndex]->setActive();
             keyFrames[keyFrameIndex]->setMagnitude(fIndex, mag);
+        }
     }
 }
 
@@ -76,6 +82,93 @@ int AdditiveSpectrum::getNKeyFrames() {return nKeyFrames;}
 
 
 
+void AdditiveSpectrum::saveSpectrum(juce::FileOutputStream& outputStream)
+{
+    juce::ValueTree fileDataTree("SpectrumData");
+    // Metadata:
+    fileDataTree.setProperty("nKeyFrames", nKeyFrames, nullptr);
+    fileDataTree.setProperty("nFreqs", nFreqs, nullptr);
+    fileDataTree.setProperty("duration", duration, nullptr);
+    fileDataTree.setProperty("noteFreq", noteFreq, nullptr);
+    
+    // Keyframes:
+    juce::ValueTree activeKeyframeTree("KeyframeData");
+    KeyFrame* kF = keyFrames[0];
+    while (kF != nullptr)
+    {
+        if (kF->getIsActive())
+        {
+            juce::ValueTree keyframeData("Keyframe");
+            keyframeData.setProperty("kFIndex", kF->getIndex(), nullptr);
+            for (int i=0; i < nFreqs; i++)
+            {
+                float magnitude = kF->getMagnitude(i, true);
+                if (magnitude == 0.0f) continue; // only save non-trivial points
+
+                juce::ValueTree magnitudeData("magnitude");
+                magnitudeData.setProperty("index", i, nullptr);
+                magnitudeData.setProperty("value", magnitude, nullptr);
+                keyframeData.addChild(magnitudeData,-1,nullptr);
+            }
+            activeKeyframeTree.addChild(keyframeData, -1, nullptr);
+        }
+        kF = kF->getNextActive();
+    }
+    fileDataTree.addChild(activeKeyframeTree, -1, nullptr);
+
+    fileDataTree.writeToStream(outputStream);
+    DBG(fileDataTree.toXmlString());
+}
+void AdditiveSpectrum::loadSpectrum(juce::FileInputStream& inputStream)
+{
+    setTime(0.0f); // Reset time to the first 0th keyframe. Audio thread should thus not perform interpolation no matter how many keyframes are added/removed (Not guaranteed!)
+
+    juce::ValueTree fileDataTree = juce::ValueTree::readFromStream(inputStream);
+
+    nKeyFrames = fileDataTree["nKeyFrames"];
+    nFreqs = fileDataTree["nFreqs"];
+    duration = fileDataTree["duration"];
+    noteFreq = fileDataTree["noteFreq"];
+    timeFloatEpsilon = duration/(2*4*(nKeyFrames));
+    
+    jassert(nKeyFrames > 0 && nFreqs > 0 && duration > 0.0f);
+    
+    
+    for (auto i=0; i < nKeyFrames; i++)
+    {   
+        if (i < keyFrames.size()) // Reset data of current keyframes:
+            keyFrames[i]->reset();
+        else // Allocate more keyframes if more are needed:
+            keyFrames.add(new KeyFrame(i, this));
+    }
+    
+    // Load active keyframes:
+    juce::ValueTree activeKeyframeTree = fileDataTree.getChildWithName("KeyframeData");
+    for (juce::ValueTree keyframeData : activeKeyframeTree)
+    {
+        int kFIndex = keyframeData["kFIndex"];
+        KeyFrame* kf = keyFrames[kFIndex];
+        kf->setActive(false); // Set keyframe as active
+        for (juce::ValueTree magnitudeData : keyframeData)
+        {
+            int i = magnitudeData["index"];
+            kf->setMagnitude(i, magnitudeData["value"]);
+        }
+    }
+    keyFrames[0]->refreshKFLinks();
+}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -85,26 +178,54 @@ AdditiveSpectrum::KeyFrame::KeyFrame(int index, AdditiveSpectrum* spec)
             isActive(false),
             nextActive(nullptr),
             prevActive(nullptr),
-            spectrum(spec) {}
+            spectrum(spec)
+{
+    for (auto i = 0; i < spectrum->nFreqs; i++)
+    {
+        magnitudes.add(0.0f);
+    }
+}
+
+void AdditiveSpectrum::KeyFrame::reset()
+{
+    isActive = false;
+
+    for (auto i = 0; i < spectrum->nFreqs; i++)
+    {
+        if (i < magnitudes.size())
+            magnitudes.set(i, 0.0f);
+        else
+            magnitudes.add(0.0f);
+    }
+
+    timeStamp = (float) kFIndex / (spectrum->nKeyFrames-1) * spectrum->duration;
+    nextActive = nullptr;
+    prevActive = nullptr;
+}
     
 bool AdditiveSpectrum::KeyFrame::operator<(KeyFrame a) {return kFIndex < a.kFIndex;}
 
 AdditiveSpectrum::KeyFrame* AdditiveSpectrum::KeyFrame::getNextActive() {return nextActive;}
 float AdditiveSpectrum::KeyFrame::getTimeStamp() {return timeStamp;}
+int AdditiveSpectrum::KeyFrame::getIndex() {return kFIndex;}
     
 void AdditiveSpectrum::KeyFrame::setMagnitude(int fIndex, float mag)
 {
-    if (!isActive) setActive(prevActive);
     magnitudes.set(fIndex, mag);
 }
     
-float AdditiveSpectrum::KeyFrame::getMagnitude(int fIndex)
+float AdditiveSpectrum::KeyFrame::getMagnitude(int fIndex, bool trueValue)
 {
+    if (trueValue) return magnitudes[fIndex]; // return true value without interpolation
+
     bool beforeKF = (spectrum->time < timeStamp);
     KeyFrame* left;
     KeyFrame* right;
     if (isActive) // this key frame is active
     {
+        // If the time cursor is very close to this keyframe, just return this keyframe's value
+        if (std::abs(spectrum->time - timeStamp) < spectrum->timeFloatEpsilon) return magnitudes[fIndex];
+
         if (beforeKF) // time point is before this key frame
         {
             right = this;
@@ -133,27 +254,32 @@ float AdditiveSpectrum::KeyFrame::getMagnitude(int fIndex)
     return interpolate(fIndex, left, right);
 }
 
-void AdditiveSpectrum::KeyFrame::setActive(KeyFrame* toCopy)
+void AdditiveSpectrum::KeyFrame::setActive(bool refreshLinks)
 {
-    if (magnitudes.size() > 0) magnitudes.clear(); // Reset keyframe if necessary
+    if (isActive) return; // keyframe already active!
+
+    KeyFrame* toCopy = prevActive;
+
     for (auto i = 0; i < spectrum->nFreqs; i++)
     {
-        if (toCopy == nullptr) magnitudes.add(0.0f);
-        else magnitudes.add(toCopy->getMagnitude(i));
+        if (toCopy == nullptr) magnitudes.set(i, 0.0f);
+        else magnitudes.set(i, toCopy->getMagnitude(i));
     }
     isActive = true;
 
-    // Must refresh keyframe active links after setting a new keyframe to active:
-    refreshKFLinks();
-    // Refresh GUI to include keyframe markers:
-    if (spectrum && spectrum->timeSlider) spectrum->timeSlider->refreshKeyFrameMarkers();
+    if (refreshLinks)
+    {
+        // Must refresh keyframe active links after setting a new keyframe to active:
+        refreshKFLinks();
+    }
+    
 }
 
 void AdditiveSpectrum::KeyFrame::removeActive()
 {
     if (isActive)
     {
-        magnitudes.clear();
+        for (float& val : magnitudes) val = 0.0f;
         isActive = false;
         refreshKFLinks();
         if (spectrum && spectrum->timeSlider) spectrum->timeSlider->refreshKeyFrameMarkers();
@@ -186,6 +312,9 @@ void AdditiveSpectrum::KeyFrame::refreshKFLinks()
         if (tempActiveKF) kF->nextActive = tempActiveKF;
         if (kF->isActive) tempActiveKF = kF;
     }
+
+    // Refresh GUI to include keyframe markers:
+    if (spectrum && spectrum->timeSlider) spectrum->timeSlider->refreshKeyFrameMarkers();
 }
 
 inline float AdditiveSpectrum::KeyFrame::interpolate(int fIndex, KeyFrame* left, KeyFrame* right)

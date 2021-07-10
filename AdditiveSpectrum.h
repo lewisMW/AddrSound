@@ -26,6 +26,9 @@ public:
     void updateKeyFrameTimes(juce::Array<float>& arrayOfKFTimes);
     void deleteKeyframe(float t);
 
+    void saveSpectrum(juce::FileOutputStream& outputStream);
+    void loadSpectrum(juce::FileInputStream& inputStream);
+
 private:
 
     class KeyFrame
@@ -37,21 +40,23 @@ private:
 
         KeyFrame* getNextActive();
         float getTimeStamp();
+        int getIndex();
         
         void setMagnitude(int fIndex, float mag);
-        float getMagnitude(int fIndex);
+        float getMagnitude(int fIndex, bool trueValue = false);
         
-        void setActive(KeyFrame* toCopy = nullptr);
+        void setActive(bool refreshLinks = true);
         void removeActive();
         bool getIsActive();
 
         void refreshKFLinks();
+        void reset();
 
     private:
         juce::Array<float> magnitudes;
         bool isActive;
         const int kFIndex;
-        const float timeStamp;
+        float timeStamp;
         KeyFrame* nextActive;
         KeyFrame* prevActive;
         const AdditiveSpectrum* spectrum;
@@ -59,11 +64,13 @@ private:
         inline float interpolate(int fIndex, KeyFrame* left, KeyFrame* right);
     };
     
-    const int nKeyFrames;
+    int nKeyFrames;
     juce::OwnedArray<KeyFrame> keyFrames;
     int keyFrameIndex;
 
     float noteFreq;
+
+    float timeFloatEpsilon;
     
     enum ErrorCode {KeyFrameOutOfBounds, NullKeyFrame, KeyFrameExists};
     inline void printError(int kFIndex, ErrorCode err)

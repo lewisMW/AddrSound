@@ -19,6 +19,7 @@ public:
     void mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel) override;
 
     void refreshPoints(bool ref = false, Spectrum::Peaks* peaks = nullptr);
+    void initPoints();
 
     void clearSpectrum(bool ref = false);
 
