@@ -33,12 +33,7 @@ public:
 
     void refreshFFT();
 
-    struct FFTPeaks
-    {
-        std::vector<int> indexs;
-        std::vector<float> values;
-    };
-    void calcPeaks(FFTPeaks& peaks);
+    void calcPeaks(Peaks& peaks);
 
 private:
     void hanningWindow(float* x, int N);
@@ -56,5 +51,7 @@ private:
 
     juce::Array<std::complex<float>> fftSpectrumArray;
     juce::Array<float> fftSpectrumArrayAbs;
+    float maxFFTMagnitude;
+    const bool useGlobalNormalisation;
     
 };

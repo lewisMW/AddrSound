@@ -24,6 +24,12 @@ public:
     PlayState getPlayState();
     void setPlayState(PlayState pS);
 
+    struct Peaks
+    {
+        std::vector<int> indexs;
+        std::vector<float> values;
+    };
+
 protected:
 
     const int nFreqs;

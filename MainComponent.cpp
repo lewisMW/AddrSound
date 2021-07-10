@@ -76,7 +76,7 @@ void MainComponent::getNextAudioBlock (const juce::AudioSourceChannelInfo& buffe
 
     if (refPlaying.load(std::memory_order_acquire) == true) // Play reference audio
     {
-        std::shared_ptr<FFTSpectrum::FFTPeaks> peaks = std::atomic_load_explicit(&fftPeaks, std::memory_order_acquire);
+        std::shared_ptr<Spectrum::Peaks> peaks = std::atomic_load_explicit(&fftPeaks, std::memory_order_acquire);
         auto nOscillators = std::min<int>(oscillators.size(), (int) peaks->indexs.size());
         for(auto oIndex=0; oIndex < nOscillators; oIndex++)
         {
@@ -205,14 +205,14 @@ void MainComponent::loadReferenceFile()
                 refSpectrum.setTime((float) refAudioPositionSlider.getValue());                
                 refSpectrum.refreshFFT();
 
-                std::shared_ptr<FFTSpectrum::FFTPeaks> peaks(new FFTSpectrum::FFTPeaks());
+                std::shared_ptr<Spectrum::Peaks> peaks(new Spectrum::Peaks());
                 refSpectrum.calcPeaks(*peaks);
                 std::atomic_store_explicit(&fftPeaks,peaks, std::memory_order_release);
                 circularPointerBuffer[circularPointerBufferIndex++] = peaks;
                 circularPointerBufferIndex %= circularPointerBuffer.size();
                 refPlaying.store(true, std::memory_order_release);
 
-                spectrumEditor.refreshRefPoints();
+                spectrumEditor.refreshPoints(true, peaks.get());
                 spectrumEditor.repaint();
             };
             

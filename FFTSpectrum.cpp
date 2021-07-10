@@ -1,7 +1,8 @@
 #include "FFTSpectrum.h"
 
 FFTSpectrum::FFTSpectrum(int nFq, int windowSamples, int downSamplingRate)
-    : Spectrum(nFq,  0.0f), fftWindowSampleN(windowSamples), audioSource(nullptr), downSamplingRate(downSamplingRate)
+    : Spectrum(nFq,  0.0f), fftWindowSampleN(windowSamples), downSamplingRate(downSamplingRate),
+      audioSource(nullptr), useGlobalNormalisation(false)
 {
     fftSpectrumArray.resize(nFreqs*2); // to account for other half of the symmetric FFT
     fftSpectrumArrayAbs.resize(nFreqs);
@@ -11,6 +12,8 @@ FFTSpectrum::FFTSpectrum(int nFq, int windowSamples, int downSamplingRate)
     inputBufferInfo.numSamples = inputBufferSize;
     inputBufferInfo.startSample = 0;
     inputBufferInfo.buffer = new juce::AudioSampleBuffer(2, inputBufferSize);
+
+    maxFFTMagnitude = 0.0f;
 }
 
 FFTSpectrum::~FFTSpectrum()
@@ -39,6 +42,7 @@ void FFTSpectrum::addAudioSource(juce::AudioFormatReader* reader, bool ownsReade
     fs = (float) audioSource->getAudioFormatReader()->sampleRate;
     nTotalSamples = audioSource->getAudioFormatReader()->lengthInSamples;
     duration = (float) nTotalSamples / fs;
+    maxFFTMagnitude = 0.0f; // reset normalisation factor for new source
 
     audioSource->prepareToPlay(fftWindowSampleN, (double) fs);
 }
@@ -74,19 +78,19 @@ void FFTSpectrum::refreshFFT()
 
     FFT(downSampledSignal, spectrumArr, nFFTPoints, fftWindowSampleN); 
 
-    float max = 0.0f;
+    if (!useGlobalNormalisation) maxFFTMagnitude = 0.0f; // Normalisation factor
     // Absolute value
     for (int i=0; i<nFreqs; i++)
     {
         float abs = std::abs<float>(fftSpectrumArray[i]);
         fftSpectrumArrayAbs.set(i,abs);
-        if (abs > max) max = abs;
+        if (abs > maxFFTMagnitude) maxFFTMagnitude = abs;
     }
 
     // Normalise
-    if (max > 0.0f)
+    if (maxFFTMagnitude > 0.0f)
     {
-        for (float& x : fftSpectrumArrayAbs) x /= max;
+        for (float& x : fftSpectrumArrayAbs) x /= maxFFTMagnitude;
     }
 }
 
@@ -201,7 +205,7 @@ void FFTSpectrum::FFT(const float* x_raw, std::complex<float>* X, int nDFTSample
 }
 
 
-void FFTSpectrum::calcPeaks(FFTPeaks& peaks)
+void FFTSpectrum::calcPeaks(Peaks& peaks)
 {
     float* spectrumRaw = fftSpectrumArrayAbs.getRawDataPointer();
     int spectrumLen = fftSpectrumArrayAbs.size();

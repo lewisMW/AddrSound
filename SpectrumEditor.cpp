@@ -5,7 +5,8 @@
 #include "FFTSpectrum.h"
 
 SpectrumEditor::SpectrumEditor(AdditiveSpectrum& spectrum, FFTSpectrum& refSpectrum)
-    : spectrum(spectrum), refSpectrum(refSpectrum)
+    : spectrum(spectrum),
+      refSpectrum(refSpectrum), refDisplayOffset(0.0f), refDisplayScale(1.0f)
 {
     // Initialise spectrum points:
     for (auto i = 0; i < spectrum.getNFreqs(); i++)
@@ -23,6 +24,7 @@ void SpectrumEditor::paint (juce::Graphics& g)
 
     const juce::Point<float> bottomLeft(0,(float) getHeight() - bottomPadding);
     const juce::Point<float> bottomRight((float) getWidth(),(float) getHeight() - bottomPadding);
+    g.setFont(9.0f);
 
     // Reference Spectrum in background, so first:
     if(!refSpectrumPoints.isEmpty())
@@ -35,8 +37,16 @@ void SpectrumEditor::paint (juce::Graphics& g)
             if (refSpectrumPoints[i] == nullptr) continue;
             
             updateDisplayCoords(refSpectrumPoints[i]);
-            juce::Point<float>& coords = refSpectrumPoints[i]->displayCoords;
+            juce::Point<float> coords = refSpectrumPoints[i]->displayCoords;
+            coords.x *= refDisplayScale; // Scale this coordinate
+            coords.x += refDisplayOffset; // Offset this coordinate
             refSpectrumPath.lineTo(coords);
+            if(refSpectrumPoints[i]->marked) // Mark frequency points
+            {
+                const float circleRadius = boundaryRadius;
+                g.fillEllipse(coords.x - circleRadius/2, coords.y - circleRadius/2, circleRadius, circleRadius);
+                g.drawText(juce::String(juce::roundToInt<float>(refSpectrumPoints[i]->getFrequency())), (int)coords.x - 10, (int)coords.y - 20, 20, 20, juce::Justification::centred);
+            }
         }
         refSpectrumPath.lineTo(bottomRight);
         refSpectrumPath.closeSubPath();
@@ -65,10 +75,14 @@ void SpectrumEditor::paint (juce::Graphics& g)
         
         // Draw circles as points:
         if (spectrumPoints[i]->selected)
+        {
             g.setColour(juce::Colours::rosybrown);
+            // Mark frequency:
+            g.drawText(juce::String(juce::roundToInt<float>(spectrumPoints[i]->getFrequency())), (int)coords.x - 20, (int)coords.y - 20, 40, 20, juce::Justification::centred);
+        }
         else
             g.setColour(juce::Colours::red);
-        float circleRadius = boundaryRadius;
+        const float circleRadius = boundaryRadius;
         g.fillEllipse(coords.x - circleRadius, coords.y - circleRadius, 2*circleRadius, 2*circleRadius);
     }
     spectrumPath.lineTo(bottomRight);
@@ -85,29 +99,40 @@ void SpectrumEditor::paint (juce::Graphics& g)
 void SpectrumEditor::mouseDrag (const juce::MouseEvent& event)  
 {
 
-    // Determine if a point has been selected
-    
-    for (auto i = 0; i < spectrumPoints.size(); i++)
+    const juce::ModifierKeys& modifierKeys = event.mods;
+    if (modifierKeys.isLeftButtonDown()) // Change magnitude of additive spectra points
     {
-
-        juce::Point<float>& pointPosition = spectrumPoints[i]->displayCoords;
-        if (inBoundary(pointPosition, event.position))
+        // Determine if a point has been selected
+        
+        for (auto i = 0; i < spectrumPoints.size(); i++)
         {
-            // Mouse is close to peak i
-            if (pointSelected) pointSelected->selected = false;
-            pointSelected = spectrumPoints[i];
-            pointSelected->selected = true;
-            
-            juce::String debugMsg = "Selected point #" + juce::String((int) i);
-            DBG(debugMsg);
-            break;
+
+            juce::Point<float>& pointPosition = spectrumPoints[i]->displayCoords;
+            if (inBoundary(pointPosition, event.position))
+            {
+                // Mouse is close to peak i
+                if (pointSelected) pointSelected->selected = false;
+                pointSelected = spectrumPoints[i];
+                pointSelected->selected = true;
+                pointSelected->marked = true;
+                
+                juce::String debugMsg = "Selected point #" + juce::String((int) i);
+                DBG(debugMsg);
+                break;
+            }
+        }
+
+        if (pointSelected != nullptr)  // point selected
+        {
+            float mag = coordsToMagnitude(event.position);
+            pointSelected->updateMagnitude(mag);
+            repaint();
         }
     }
-
-    if (pointSelected != nullptr)  // point selected
+    else if (modifierKeys.isRightButtonDown()) // Right drag offsets reference spectrum
     {
-        float mag = coordsToMagnitude(event.position);
-        pointSelected->updateMagnitude(mag);
+        float deltaX = (float) event.getDistanceFromDragStartX();
+        offsetRefSpectrum(deltaX);
         repaint();
     }
 }
@@ -127,37 +152,85 @@ void SpectrumEditor::mouseUp (const juce::MouseEvent& event)
     }
 }
 
-
-
-
-
-
-void SpectrumEditor::refreshPoints()
+void SpectrumEditor::mouseWheelMove(const juce::MouseEvent& /*event*/, const juce::MouseWheelDetails& wheel)
 {
-    for (SpectrumPoint* p : spectrumPoints) p->fromSpectrum();
-}
-void SpectrumEditor::refreshRefPoints()
-{
-    for (SpectrumPoint* p : refSpectrumPoints) p->fromSpectrum();
+    int dir = (wheel.isReversed ? -1 : 1);
+    const float offsetScrollGain = 10.0f;
+    
+    scaleRefSpectrum(wheel.deltaY*dir);
+    offsetRefSpectrum(wheel.deltaX*dir*offsetScrollGain);
+    repaint();
 }
 
-void SpectrumEditor::clearSpectrum()
+
+
+
+
+
+void SpectrumEditor::refreshPoints(bool ref, Spectrum::Peaks* peaks)
 {
-    for (SpectrumPoint* p : spectrumPoints) p->updateMagnitude(0.0f);
+    juce::OwnedArray<SpectrumPoint>& points = ref ? refSpectrumPoints : spectrumPoints;
+
+    // For marking peaks:
+    if (peaks != nullptr && peaks->indexs.size() > 0)
+    {
+        int nPeaks = (int)peaks->indexs.size();
+        int peakIndex = 0;
+        int currentPeakIndex = peaks->indexs[peakIndex++];
+
+        for (int i=0; i<points.size(); i++)
+        {
+            auto p = points[i];
+            bool isPeak = false;
+            if (currentPeakIndex == i)
+            {
+                isPeak = true;
+                if (nPeaks > peakIndex) currentPeakIndex = peaks->indexs[peakIndex++];
+            }
+            p->fromSpectrum(isPeak);
+        }
+    }
+    else // no peaks
+    {
+        for (int i=0; i<points.size(); i++)
+        {
+            auto p = points[i];
+            p->fromSpectrum();
+        }
+    }
 }
-void SpectrumEditor::clearRefSpectrum()
+
+void SpectrumEditor::clearSpectrum(bool ref)
 {
-    for (SpectrumPoint* p : refSpectrumPoints) p->updateMagnitude(0.0f);
+    juce::OwnedArray<SpectrumPoint>& points = ref ? refSpectrumPoints : spectrumPoints;
+
+    for (SpectrumPoint* p : points) p->updateMagnitude(0.0f);
 }
 
 void SpectrumEditor::addRefSpectrum()
 {
     refSpectrumPoints.clear(true);
+    refDisplayOffset = 0.0f; // Reset offset and scale:
+    refDisplayScale = 1.0f;
     for (auto i = 0; i < refSpectrum.getNFreqs(); i++)
     {
         SpectrumPoint* point = new SpectrumPoint((int) i, refSpectrum);
         refSpectrumPoints.add(point);
     }
+}
+inline void SpectrumEditor::offsetRefSpectrum(float delta)
+{
+    refDisplayOffset += delta;
+    // Thresholds:
+    if (refDisplayOffset < -getWidth()/2) refDisplayOffset = (float) -getWidth()/2;
+    else if (refDisplayOffset > getWidth()/2) refDisplayOffset = (float) getWidth()/2;
+}
+inline void SpectrumEditor::scaleRefSpectrum(float delta)
+{
+    refDisplayScale += delta;
+    // Thresholds:
+    if (refDisplayScale < 0.25f) refDisplayScale = 0.25f;
+    else if (refDisplayScale > 5.0f) refDisplayScale = 5.0f;
 }
 
 
@@ -192,6 +265,8 @@ inline bool  SpectrumEditor::inBoundary(const juce::Point<float>& circleCenter, 
 SpectrumEditor::SpectrumPoint::SpectrumPoint(int i, Spectrum& spectrum)
     : index(i), spectrum(spectrum)
 {
+    marked = false;
+    selected = false;
     fromSpectrum();
 }
 
@@ -200,9 +275,10 @@ inline void SpectrumEditor::SpectrumPoint::updateMagnitude(float mag)
     magnitude = mag;
     spectrum.setMagnitude(index, mag);
 }
-inline void SpectrumEditor::SpectrumPoint::fromSpectrum()
+inline void SpectrumEditor::SpectrumPoint::fromSpectrum(bool isPeak)
 {
     magnitude = spectrum.getMagnitude(index);
+    marked = isPeak;
 }
    
 inline float SpectrumEditor::SpectrumPoint::getFrequency()

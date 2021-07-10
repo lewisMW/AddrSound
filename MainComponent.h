@@ -70,8 +70,8 @@ private:
 
     // 4. Audio Reference File Playing
     std::atomic<bool> refPlaying;
-    std::shared_ptr<FFTSpectrum::FFTPeaks> fftPeaks;
-    std::array<std::shared_ptr<FFTSpectrum::FFTPeaks>,8> circularPointerBuffer;
+    std::shared_ptr<Spectrum::Peaks> fftPeaks;
+    std::array<std::shared_ptr<Spectrum::Peaks>,8> circularPointerBuffer;
     int circularPointerBufferIndex;
     
     // 5. Other:
