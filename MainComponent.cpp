@@ -5,13 +5,14 @@ MainComponent::MainComponent()
     : additiveSpectrum(30, 440, 0.5f, 10),
       refSpectrum(512, 512, 2),
       spectrumEditor(additiveSpectrum, refSpectrum),
-      timeSlider(additiveSpectrum, spectrumEditor)
+      timeSlider(additiveSpectrum, spectrumEditor),
+      midiPlayer(additiveSpectrum, timeSlider, effectSettings.getControlValue(EffectSettings::ControlID::Midi))
 {
     level = 0.0f;
 
     createWaveTable();
 
-    setSize (600, 425);
+    setSize (500, 450);
     setAudioChannels(0,2); // Only outputs
 
     setWantsKeyboardFocus(true);
@@ -27,8 +28,16 @@ MainComponent::MainComponent()
 
     circularPointerBufferIndex = 0;
     addAndMakeVisible(refAudioPositionSlider);
+    refAudioPositionSlider.setTextValueSuffix(" s");
+    refAudioPositionSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 100, 20);
     refAudioPositionSlider.setEnabled(false);
     addMouseListener(&refAudioPositionSlider, false);
+
+    addAndMakeVisible(effectSettings);
+    effectSettings.addCustomCallback(EffectSettings::ControlID::Gain, [this] (std::atomic<double>& delta) {
+        spectrumEditor.multiplyAllPoints(delta);
+        spectrumEditor.repaint();
+    });
 
     setKeyboardNoteBindings();    
 }
@@ -44,6 +53,8 @@ void MainComponent::createWaveTable()
 {
     sineTable.setSize(1, (int) tableSize + 1);
     auto* samples = sineTable.getWritePointer(0);
+    squareTable.setSize(1, (int) tableSize + 1);
+    auto* squareSamples = squareTable.getWritePointer(0);
     auto angleDelta = juce::MathConstants<double>::twoPi / (double) (tableSize-1);
     auto currentAngle = 0.0;
 
@@ -51,21 +62,27 @@ void MainComponent::createWaveTable()
     {
         auto sample = std::sin(currentAngle);
         samples[i] = (float) sample;
+        squareSamples[i] = (float) std::tanh(50*sample); // mimick a square
         currentAngle += angleDelta;
     }
     samples[tableSize] = samples[0];
+    squareSamples[tableSize] = samples[0];
 }
 
 void MainComponent::prepareToPlay (int /*samplesPerBlockExpected*/, double sampleRate)
 {
     for(auto i=0; i < additiveSpectrum.getNFreqs(); i++)
     {
-        auto* oscillator = new WavetableOscillator(sineTable, (float) sampleRate);
+        auto* oscillator = new WavetableOscillator(sineTable, squareTable, (float) sampleRate);
         oscillator->setAmplitude(additiveSpectrum.getMagnitude(i));
         oscillator->setFrequency(additiveSpectrum.getFrequency(i));
+        oscillator->setVibratoFactor(effectSettings.getControlValue(EffectSettings::ControlID::Vibrato));
+        oscillator->setDistortionFactor(effectSettings.getControlValue(EffectSettings::ControlID::Distortion));
         oscillators.add(oscillator);
     }
     level = 0.5f / (float) additiveSpectrum.getNFreqs();
+
+    reverb.setSampleRate(sampleRate);
 }
 
 void MainComponent::getNextAudioBlock (const juce::AudioSourceChannelInfo& bufferToFill)
@@ -110,10 +127,18 @@ void MainComponent::getNextAudioBlock (const juce::AudioSourceChannelInfo& buffe
                 // Playing additive oscillators
                 
                 current += oscillator->getNextSample() * level;
-                
                 leftBuffer[sample] += current;
                 rightBuffer[sample] += current;
             }
+        }
+        // Process reverb:
+        std::atomic<double>* reverbFactor = effectSettings.getControlValue(EffectSettings::ControlID::Reverb);
+        if (reverbFactor)
+        {
+            reverbParameters.roomSize = (float) *reverbFactor;
+            reverbParameters.wetLevel = (float) *reverbFactor;
+            reverb.setParameters(reverbParameters);
+            reverb.processStereo(leftBuffer, rightBuffer, bufferToFill.numSamples);
         }
     }
 }
@@ -141,8 +166,9 @@ void MainComponent::resized()
 
     spectrumEditor.setBounds(50,50,400,300);
     timeSlider.setBounds(50,360,400,20);
+    effectSettings.setBounds(50, 10, 300, 30);
     toolsButton.setBounds(350, 10, 100, 30);
-    refAudioPositionSlider.setBounds(50, 400, 400, 20);
+    refAudioPositionSlider.setBounds(50, 400, 400, 40);
 }
 
 
@@ -153,6 +179,11 @@ MainComponent::ToolsButton::ToolsButton()
     setText("Tools");
     addItem(juce::String("Save Spectrum"), ItemIDs::SaveID);
     addItem(juce::String("Load Spectrum"), ItemIDs::LoadID);
+    addItem(juce::String("Play MIDI File"), ItemIDs::MidiID);
+    addItem(juce::String("Gain"), ItemIDs::GainID);
+    addItem(juce::String("Vibrato"), ItemIDs::VibratoID);
+    addItem(juce::String("Distortion"), ItemIDs::DistortionID);
+    addItem(juce::String("Reverb"), ItemIDs::ReverbID);
     addItem(juce::String("Load Reference Spectrum"), ItemIDs::LoadRefID);
     
 }
@@ -167,6 +198,22 @@ void MainComponent::toolsMenuSelect()
             break;
         case ToolsButton::ItemIDs::LoadID:
             loadSpectrum();
+            break;
+        case ToolsButton::ItemIDs::MidiID:
+            effectSettings.showControl(EffectSettings::ControlID::Midi);
+            if (!midiPlayer.isTimerRunning()) loadMidi();
+            break;
+        case ToolsButton::ItemIDs::GainID:
+            effectSettings.showControl(EffectSettings::ControlID::Gain);
+            break;
+        case ToolsButton::ItemIDs::VibratoID:
+            effectSettings.showControl(EffectSettings::ControlID::Vibrato);
+            break;
+        case ToolsButton::ItemIDs::DistortionID:
+            effectSettings.showControl(EffectSettings::ControlID::Distortion);
+            break;
+        case ToolsButton::ItemIDs::ReverbID:
+            effectSettings.showControl(EffectSettings::ControlID::Reverb);
             break;
         case ToolsButton::ItemIDs::LoadRefID:   
             loadReferenceFile();
@@ -252,6 +299,121 @@ void MainComponent::loadReferenceFile()
             "Error Reading Audio File",
                 "The file selected (" + file.getFileName() + ") could not be read as an audio file.");
         }
+    }
+}
+
+void MainComponent::loadMidi()
+{
+    midiPlayer.stopTimer(); // ensure player thread has stopped, as the following will delete current midi data
+
+    juce::FileChooser fC("Load MIDI file");
+    if (fC.browseForFileToOpen())
+    {
+        juce::File file = fC.getResult();
+        juce::FileInputStream fileStream(file);
+   
+        if (fileStream.openedOk() && mFile.readFrom(fileStream) && mFile.getNumTracks())
+        {
+            int nTracks = mFile.getNumTracks();
+            mFile.convertTimestampTicksToSeconds();
+            int trackIndex = 0;
+            if (nTracks > 1)
+            {
+                juce::AlertWindow chooseTrack("Choose the MIDI track to play", "The choosen MIDI file has "+juce::String(nTracks)+" tracks. Enter which one to play below:",juce::AlertWindow::AlertIconType::QuestionIcon);
+                juce::StringArray trackNames;
+                for (int i=0; i<nTracks; i++)
+                {
+                    juce::String trackName = "Untitled";
+                    auto* track = mFile.getTrack(i);
+                    if (track)
+                    {
+                        for (auto* midiEvent : *track)
+                        {
+                            auto msg = midiEvent->message;
+                            if (msg.isTrackNameEvent())
+                            {
+                                trackName = msg.getTextFromTextMetaEvent();
+                                break;
+                            }
+                        }
+                    }
+                    trackNames.add(trackName);
+                }
+                chooseTrack.addComboBox("trackSelection", trackNames, "Track Selection");
+                chooseTrack.addButton("Select",0);
+                chooseTrack.runModalLoop();
+                trackIndex = chooseTrack.getComboBoxComponent("trackSelection")->getSelectedItemIndex();
+            }
+            auto* track = mFile.getTrack(trackIndex);
+            midiPlayer.play(track);
+        }
+        else
+        {
+            juce::AlertWindow::showMessageBox(juce::AlertWindow::AlertIconType::WarningIcon,
+            "Error Reading MIDI File",
+                "The file selected (" + file.getFileName() + ") could not be read as a MIDI file or contained no tracks.");
+        }
+    }
+}
+
+MainComponent::MidiTimer::MidiTimer(AdditiveSpectrum& additiveSpectrum, TimeSlider& timeSlider, std::atomic<double>* midiControlState)
+    : additiveSpectrum(additiveSpectrum), timeSlider(timeSlider), midiControlState(midiControlState) {}
+
+void MainComponent::MidiTimer::play(const juce::MidiMessageSequence *track)
+{
+    eventIndex = 0;
+    currentTime = 0.0;
+    currentMsg = nullptr;
+    nEvents = 0;
+    if (track)
+    {
+        *midiControlState = (double) EffectSettings::PlaybackControlState::Play;
+        midiTrack = track;
+        nEvents = midiTrack->getNumEvents();
+        scheduleNextNote();
+    }
+}
+
+void MainComponent::MidiTimer::scheduleNextNote()
+{
+    for (; eventIndex < nEvents; eventIndex++)
+    {
+        auto* event = midiTrack->getEventPointer(eventIndex);
+        auto* msg = &event->message;
+        if (msg->isNoteOn())
+        {
+            double timeToWait = msg->getTimeStamp() - currentTime; // in seconds
+            int timeToWaitMilliseconds = (int) (timeToWait*1000);
+            if (timeToWaitMilliseconds == 0) continue; // Skip polyphony
+            currentMsg = msg;
+            eventIndex++; // Have to increment before timer blocks this UI thread (if first note)
+            this->startTimer(timeToWaitMilliseconds);
+            break;
+        }
+    }
+    if (eventIndex == nEvents) this->stopTimer();
+}
+
+void MainComponent::MidiTimer::hiResTimerCallback()
+{
+    // Check if user has requested to pause/stop playback:
+    if (*midiControlState != (double) EffectSettings::PlaybackControlState::Play)
+    {
+        if (*midiControlState == (double) EffectSettings::PlaybackControlState::Pause) this->startTimer(500);
+        if (*midiControlState == (double) EffectSettings::PlaybackControlState::Stop) this->stopTimer();
+        return;
+    }
+    // Play Midi note:
+    if (currentMsg)
+    {
+        float freq = (float) juce::MidiMessage::getMidiNoteInHertz(currentMsg->getNoteNumber());
+        additiveSpectrum.setFirstFrequency((float) freq);
+
+        const juce::MessageManagerLock mmLock; // Lock UI thread whilst updating sound graphics:
+        timeSlider.playSound();
+
+        currentTime = currentMsg->getTimeStamp();
+        scheduleNextNote();
     }
 }
 

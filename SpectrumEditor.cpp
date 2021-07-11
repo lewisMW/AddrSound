@@ -196,6 +196,14 @@ void SpectrumEditor::refreshPoints(bool ref, Spectrum::Peaks* peaks)
     }
 }
 
+void SpectrumEditor::multiplyAllPoints(double delta)
+{
+    for (auto point : spectrumPoints)
+    {
+        point->updateMagnitude(point->magnitude * (float) delta);
+    }
+}
+
 void SpectrumEditor::initPoints()
 {
     // Initialise spectrum points:
@@ -279,6 +287,10 @@ SpectrumEditor::SpectrumPoint::SpectrumPoint(int i, Spectrum& spectrum)
 
 inline void SpectrumEditor::SpectrumPoint::updateMagnitude(float mag)
 {
+    // Threshold:
+    if (mag < 0.0f) mag = 0.0f;
+    else if (mag > 1.0f) mag = 1.0f;
+
     magnitude = mag;
     spectrum.setMagnitude(index, mag);
 }

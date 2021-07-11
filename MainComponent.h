@@ -12,6 +12,7 @@
 #include "FFTSpectrum.h"
 #include "TimeSlider.h"
 #include "WaveTableOscillator.h"
+#include "EffectSettings.h"
 
 //==============================================================================
 /*
@@ -39,6 +40,7 @@ public:
     void saveSpectrum();
     void loadSpectrum();
     void loadReferenceFile();
+    void loadMidi();
     //==============================================================================
     bool keyPressed(const juce::KeyPress&, juce::Component*) override;
     void setKeyboardNoteBindings();
@@ -52,9 +54,12 @@ private:
     float level;
     juce::OwnedArray<WavetableOscillator> oscillators;
     juce::AudioSampleBuffer sineTable;
+    juce::AudioSampleBuffer squareTable;
     const unsigned int tableSize = 128;
+    juce::Reverb reverb;
+    juce::Reverb::Parameters reverbParameters;
 
-    // 2. Data :
+    // 2. Spectrum Data :
     AdditiveSpectrum additiveSpectrum;
     FFTSpectrum refSpectrum;
 
@@ -65,18 +70,40 @@ private:
     {
     public:
         ToolsButton();
-        enum ItemIDs {SaveID=1, LoadID, LoadRefID};
+        enum ItemIDs {SaveID=1, LoadID, MidiID, GainID, VibratoID, DistortionID, ReverbID, LoadRefID};
     } toolsButton;
 
     juce::Slider refAudioPositionSlider;
+
+    EffectSettings effectSettings;
 
     // 4. Audio Reference File Playing
     std::atomic<bool> refPlaying;
     std::shared_ptr<Spectrum::Peaks> fftPeaks;
     std::array<std::shared_ptr<Spectrum::Peaks>,8> circularPointerBuffer;
     int circularPointerBufferIndex;
-    
-    // 5. Other:
+
+    // 5. MIDI Playback
+    juce::MidiFile mFile;
+    class MidiTimer : public juce::HighResolutionTimer
+    {
+    public:
+        MidiTimer(AdditiveSpectrum& additiveSpectrum, TimeSlider& timeSlider, std::atomic<double>* midiControlState);
+        void hiResTimerCallback() override;
+        void play(const juce::MidiMessageSequence* track);
+        void scheduleNextNote();
+
+        const juce::MidiMessageSequence* midiTrack = nullptr;
+        const juce::MidiMessage* currentMsg= nullptr;
+        int nEvents;
+        int eventIndex;
+        double currentTime;
+        std::atomic<double>* midiControlState;
+        AdditiveSpectrum& additiveSpectrum;
+        TimeSlider& timeSlider;
+    } midiPlayer;
+
+    // 6. Other:
     juce::HashMap<int, int> keyboardNoteBindings;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
